@@ -5,6 +5,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/yo-WASSUP/Good-Badminton?style=social)](https://github.com/yo-WASSUP/Good-Badminton/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/yo-WASSUP/Good-Badminton?style=social)](https://github.com/yo-WASSUP/Good-Badminton/network/members)
 [![GitHub license](https://img.shields.io/github/license/yo-WASSUP/Good-Badminton)](https://github.com/yo-WASSUP/Good-Badminton/blob/main/LICENSE)
+[![RedNote](https://img.shields.io/badge/RedNote-ff2442)](https://www.xiaohongshu.com/explore/6a37b1d20000000011016229?xsec_token=ABod3wXBTiDppp6W2Ou0QHlu2eotUkeu27-ha64nFRR74=&xsec_source=pc_user)
 
 **A computer-vision toolkit for badminton match video analysis**
 
@@ -14,12 +15,13 @@
 
 ## 🎬 Preview
 
-![Good-Badminton analysis preview](assets/demo.gif)
+![Good-Badminton analysis preview](assets/demo_en.gif)
 
-Video preview: `assets/demo.mp4`.
+Video preview: `assets/demo_en.mp4`.
 
 ## 🆕 Changelog
 
+- **2026-06-23**: Added automatic court boundary detection.
 - **2026-06-20**: Initial open-source release.
 - **2026-06-17**: Project documentation cleanup.
 - **Current version**: Supports player pose detection, shuttlecock detection, court coordinate mapping, trajectory statistics, heatmaps, scatter plots, and annotated video output.
@@ -37,7 +39,7 @@ Video preview: `assets/demo.mp4`.
 - [ ] More stable hit-point recognition
 - [ ] More accurate shuttlecock detection model
 - [ ] More complete stroke statistics
-- [ ] Automatic court keypoint detection
+- [x] Automatic court keypoint detection
 - [ ] Batch video analysis workflow
 
 ---
@@ -53,15 +55,32 @@ Video preview: `assets/demo.mp4`.
 - **Visual output** - Generates annotated videos with skeletons, trajectories, statistics, and court trajectory overlays.
 - **Position charts** - Automatically generates player position heatmaps and scatter plots.
 - **Chinese / English display** - Switch visualization text with `--language zh/en`.
-- **Local execution** - Videos, models, and analysis results stay on your local machine.
+- **Local execution** - Videos, models, and analysis outputs stay on your local machine.
 
-## 📋 Requirements
+## Requirements
 
 - Python 3.8+
 - FFmpeg available in system `PATH`
-- OpenCV / PyTorch / Ultralytics / RTMLib / ONNX Runtime
-- NVIDIA GPU is recommended. CPU execution works, but video analysis will be much slower.
-- Shuttlecock YOLO weight `weights/yolo11s-ball.pt`, downloaded from the project GitHub Release.
+- Shuttlecock YOLO detection weight, downloaded from [GitHub Releases](https://github.com/yo-WASSUP/Good-Badminton/releases/latest)
+
+## Performance Requirements and Reference Speed
+
+Recommended setup:
+
+- GPU with 6GB+ VRAM. More VRAM helps with higher-resolution videos and larger pose models.
+- 16GB+ system RAM.
+- SSD storage for output videos, `detections.jsonl`, and visualization images.
+- CPU execution is supported, but pose detection and shuttlecock detection will be much slower. It is best suited for short clips or feature checks.
+
+Actual speed depends on the GPU, video resolution, pose model, preview display, and audio export settings.
+
+For a 720p video with `--pose-family yolo-pose --yolo-pose-model yolo11n-pose.pt` and `weights/yolo11s-ball.pt`, GPU timing logs are typically close to:
+
+```text
+pose 0.02s, shuttlecock 0.02s, shuttle draw 0.00s, players draw 0.01s, court draw 0.00s
+```
+
+Use `--performance-stats` to print a compact timing summary about every 5 seconds and identify whether the bottleneck is pose inference, shuttlecock detection, or drawing.
 
 ## 🚀 Installation
 
@@ -91,7 +110,6 @@ Prerequisites:
 
 - NVIDIA driver installed, and `nvidia-smi` works correctly.
 - CUDA 12.1 PyTorch wheels are recommended.
-- If DLL loading fails, install or repair Microsoft Visual C++ Redistributable 2015-2022 x64.
 
 PowerShell:
 
@@ -125,37 +143,9 @@ Switch back to CPU dependencies:
 pip install --force-reinstall -r requirements.txt
 ```
 
-## 📦 Model Preparation
-
-Shuttlecock detection uses the YOLO weight released by this project. Download `yolo11s-ball.pt` from GitHub Releases:
-
-```text
-https://github.com/yo-WASSUP/Good-Badminton/releases
-```
-
-Place it at:
-
-```text
-weights/yolo11s-ball.pt
-```
-
-RTMPose / RTMO can use local ONNX model files:
-
-```text
-weights/yolox_nano_8xb8-300e_humanart-40f6f0d0.onnx
-weights/rtmpose-s_simcc-body7_pt-body7_420e-256x192-acd4a1ef_20230504.onnx
-weights/rtmo-s_8xb32-600e_body7-640x640-dac2bf74_20231211.onnx
-```
-
-If local RTMPose / RTMO files are missing, `rtmlib` may try to download them into the user cache directory.
 
 ## 📝 Usage
 
-### Basic Run
-
-```bash
-python main.py --video-path videos/demo.mp4
-```
 
 ### First Run Workflow
 
@@ -167,13 +157,14 @@ python main.py --video-path videos/demo.mp4
 ```
 
 3. If `--template-path` is not provided, the program opens a file picker for a court template image. Usually, choose a stable frame with clear court lines.
-4. The court annotation window opens. Follow the prompt at the top of the image and click the four court corners in order: top-left, top-right, bottom-right, bottom-left.
+4. The program first tries to detect the court boundary automatically and saves `outputs/<video_name>/auto_court_preview.png`. Press Enter/Y in the preview window to accept it, or press M/R/Esc to switch to manual four-corner annotation.
+5. If manual annotation is used, follow the prompt at the top of the image and click the four court corners in order: top-left, top-right, bottom-right, bottom-left.
 
 ![Court annotation example](assets/label_court_example.png)
 
-5. After the four points are selected, the window shows a green court box and a blue pose-detection ROI. The ROI is generated automatically from the court area.
-6. The annotation is saved to `results/<video_name>/court_annotations.txt`. Re-running with the same output directory reuses this file.
-7. After analysis finishes, check `results/<video_name>/detect_<video_name>.mp4`, `detections.jsonl`, and `position_visualizations/`.
+6. After the four points are selected, the window shows a green court box and a blue pose-detection ROI. The ROI is generated automatically from the court area.
+7. The annotation is saved to `outputs/<video_name>/court_annotations.txt`. Re-running with the same output directory reuses this file.
+8. After analysis finishes, check `outputs/<video_name>/detect_<video_name>.mp4`, `detections.jsonl`, and `position_visualizations/`.
 
 Why four court points are required:
 
@@ -186,15 +177,6 @@ Why four court points are required:
 
 If the video angle, crop, or template image changes, delete the corresponding `court_annotations.txt` and annotate the four points again.
 
-### Rally Detection
-
-The program uses the court template image to detect the match view and maintain rally state automatically:
-
-- Consecutive frames matching the court view start a new rally.
-- Consecutive frames not matching the court view end the current rally.
-- Rally IDs are written to `detections.jsonl` and displayed in the output video statistics overlay.
-- Per-rally movement distance and speed statistics reset at the start of each rally. Full-match statistics keep accumulating.
-- This logic depends on the template image and four-point court annotation. Poor template selection can cause inaccurate rally segmentation.
 
 ### Pose Model Selection
 
@@ -219,7 +201,7 @@ RTMPose / RTMO modes:
 
 ```text
 --video-path                 Input video path, required
---output-dir                 Output directory, default results/<video_name>
+--output-dir                 Output directory, default outputs/<video_name>
 --ball-model                 YOLO shuttlecock detection model path, default weights/yolo11s-ball.pt
 --pose-family                Pose model family: rtmpose, rtmo, or yolo-pose
 --pose-mode                  RTMPose / RTMO mode: lightweight, balanced, performance
@@ -241,7 +223,7 @@ RTMPose / RTMO modes:
 
 ## 📊 Outputs
 
-Default output directory: `results/<video_name>/`.
+Default output directory: `outputs/<video_name>/`.
 
 - `metadata.json`: metadata for video, models, court annotation, and output files.
 - `detections.jsonl`: per-frame detection records, including rally ID, players, hands, court coordinates, speed, and shuttlecock coordinates.
@@ -254,7 +236,7 @@ Default output directory: `results/<video_name>/`.
 
 | Heatmap | Scatter Plot |
 | --- | --- |
-| ![Player position heatmap example](assets/match_heatmap.png) | ![Player position scatter plot example](assets/match_scatter.png) |
+| ![Player position heatmap example](assets/match_heatmap_en.png) | ![Player position scatter plot example](assets/match_scatter_en.png) |
 
 ## 🧩 Project Structure
 
@@ -270,10 +252,19 @@ badminton_analysis/
 └── visualization/   # Video overlays, statistics charts, and position plots
 ```
 
-## 🙏 Acknowledgements
+## Acknowledgements
 
-Thanks to the TrackNetV2 badminton dataset, the RTMPose human pose estimation project, and Ultralytics.
+Thanks to the RTMPose, RTMO, and OpenMMLab ecosystem for the pose-estimation foundations, and to [Tau-J/rtmlib](https://github.com/Tau-J/rtmlib) for the lightweight pose-estimation runtime.
+
+Thanks to [Ultralytics](https://github.com/ultralytics/ultralytics) for the YOLO object-detection algorithms and tooling.
+
+Thanks to [yastrebksv/TrackNet](https://github.com/yastrebksv/TrackNet) for organizing and releasing badminton datasets, which provided important references for shuttlecock detection and trajectory analysis in this project.
 
 ## 📄 License
 
 Project code and `weights/yolo11s-ball.pt` are licensed under Apache License 2.0. RTMPose / RTMO / YOLOX ONNX weights provided in Releases come from the OpenMMLab / RTMPose ecosystem, are used under their upstream Apache License 2.0, and retain their original attribution.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)
+
