@@ -292,21 +292,34 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
         st.info(f"识别中... run_id={run_id}（按停止识别或 Ctrl+C 中断）")
 
     last_metrics = {"total_frames": 0, "avg_fps": 0.0, "total_rallies": 0}
+    # Throttle display updates: max 15 fps. Calling st.image() at 30+ fps
+    # overwhelms Streamlit's websocket and freezes the UI.
+    last_display = 0.0
+    display_interval = 1.0 / 15.0
+    last_stats_update = 0.0
     while st.session_state.get("running", False) and not stop_event.is_set():
         try:
-            item = display_q.get(timeout=0.3)
+            item = display_q.get(timeout=0.2)
         except queue.Empty:
             continue
         if item[0] is None:  # END sentinel (frame items are np.ndarray, never None)
             break
+        now = time.time()
+        if now - last_display < display_interval:
+            # Drop frame for display; worker keeps producing at full rate.
+            continue
+        last_display = now
         frame_bgr, _idx = item
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         frame_ph.image(Image.fromarray(rgb), channels="RGB", use_container_width=True)
         last_metrics["total_frames"] = _idx + 1
-        stats_ph.markdown(
-            f"**FPS** (实时)\n\n**Frame** {_idx}\n\n"
-            f"**Status** running\n\n**Source** {source_type}"
-        )
+        # Stats panel: only update every ~0.5s to reduce markdown re-render cost
+        if now - last_stats_update >= 0.5:
+            last_stats_update = now
+            stats_ph.markdown(
+                f"**FPS** (实时)\n\n**Frame** {_idx}\n\n"
+                f"**Status** running\n\n**Source** {source_type}"
+            )
 
     t.join(timeout=5)
     st.session_state["running"] = False
@@ -332,12 +345,6 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
     if rd:
         st.session_state["last_metrics"] = summary
         st.session_state["last_run_dir"] = rd
-    # Rerun so the error/result is visible immediately (Streamlit otherwise
-    # would only show it on the next user interaction).
-    try:
-        st.rerun()
-    except Exception:
-        pass
 
 
 if start_btn and not st.session_state["running"]:
