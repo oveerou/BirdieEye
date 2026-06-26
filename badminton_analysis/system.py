@@ -112,7 +112,7 @@ class BadmintonAnalysisSystem:
             )
         else:
             self.rtmpose_processor = RTMPoseProcessor(mode=self.pose_mode, pose_family=self.pose_family)
-        self.yolo_ball_model = YOLO(self.ball_model_path, device=self.device)
+        self.yolo_ball_model = YOLO(self.ball_model_path)
 
         self.last_stats_update_frame = 0
 
