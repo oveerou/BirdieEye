@@ -67,7 +67,8 @@ class BadmintonAnalysisSystem:
                  ball_model_path='weights/yolo11s-ball.pt', template_path=None,
                  pose_mode='balanced', pose_family='rtmpose',
                  yolo_pose_model='yolo11n-pose.pt', show_pose_roi=True,
-                 frame_source=None, non_interactive_annotation=False):
+                 frame_source=None, non_interactive_annotation=False,
+                 skip_court_annotation=False):
         self.video_path = video_path
         self.show_display = show_display
         self.language = language
@@ -79,6 +80,7 @@ class BadmintonAnalysisSystem:
         self.show_pose_roi = show_pose_roi
         self.frame_source = frame_source
         self.non_interactive_annotation = non_interactive_annotation
+        self.skip_court_annotation = skip_court_annotation
 
 
         self.show_skeletons = show_skeletons
@@ -451,6 +453,15 @@ class BadmintonAnalysisSystem:
 
     def _setup_court_annotation(self, template_color):
         """Set up court annotation."""
+
+        if getattr(self, "skip_court_annotation", False):
+            h, w = template_color.shape[:2]
+            corners = [(0, 0), (w - 1, 0), (w - 1, h - 1), (0, h - 1)]
+            roi_corners = [(0, 0), (w - 1, h - 1)]
+            mid_height = h // 2
+            print(f"[court] --no-court: skipping annotation, using full frame "
+                  f"({w}x{h}) with horizontal mid_height={mid_height}")
+            return corners, roi_corners, mid_height
 
         if os.path.exists(os.path.join(self.save_dir, 'court_annotations.txt')):
             with open(os.path.join(self.save_dir, 'court_annotations.txt'), 'r') as f:

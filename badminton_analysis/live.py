@@ -1,37 +1,74 @@
 """Real-time source entry point for Good-Badminton.
 
 Usage:
-    python -m badminton_analysis.live --source screen_capture \\
-           --region 100,100,1280,720 --fps 30 --display true
+    # Screen capture with a preset region
+    python -m badminton_analysis.live --source screen_capture --preset fullscreen
+    python -m badminton_analysis.live --source screen_capture --preset center-720p
+    python -m badminton_analysis.live --source screen_capture --region 100,100,1280,720
 
-    python -m badminton_analysis.live --source browser_headless \\
-           --url https://example.com/live --fps 30 --display true
+    # Preview the captured region (one frame, no analysis, exits)
+    python -m badminton_analysis.live --source screen_capture --region 100,100,1280,720 --preview
+
+    # Skip court annotation (use whole frame; works for any content)
+    python -m badminton_analysis.live --source screen_capture --region 100,100,1280,720 --no-court
+
+    # Headless browser
+    python -m badminton_analysis.live --source browser_headless --url "https://example.com/live"
 """
 from __future__ import annotations
 
 import argparse
 import os
 import shutil
+import sys
 import time
 
 import cv2
+import mss
 
 from .sources import HeadlessBrowserSource, ScreenCaptureSource, StreamAdapter
 
 
-def build_source(args: argparse.Namespace):
-    if args.source == "screen_capture":
-        left, top, width, height = args.region
-        return ScreenCaptureSource(left=left, top=top, width=width, height=height)
-    if args.source == "browser_headless":
-        return HeadlessBrowserSource(
-            url=args.url,
-            chrome_path=args.chrome_path,
-            width=args.browser_w,
-            height=args.browser_h,
-            wait_sec=args.wait_sec,
-        )
-    raise ValueError(f"Unknown source: {args.source}")
+REGION_PRESETS = {
+    "fullscreen": None,        # filled at runtime from mss
+    "left-half": None,
+    "right-half": None,
+    "top-half": None,
+    "bottom-half": None,
+    "center-720p": None,
+    "custom": None,            # user provides --region
+}
+
+
+def _detect_screen_size() -> tuple[int, int]:
+    """Return (width, height) of the primary monitor via mss."""
+    with mss.MSS() as sct:
+        mon = sct.monitors[1]  # primary
+        return int(mon["width"]), int(mon["height"])
+
+
+def _resolve_preset(name: str, custom: list[int] | None) -> list[int]:
+    if name == "custom":
+        if custom is None:
+            raise SystemExit("--preset=custom requires --region L T W H")
+        return list(custom)
+    sw, sh = _detect_screen_size()
+    if name == "fullscreen":
+        return [0, 0, sw, sh]
+    if name == "left-half":
+        return [0, 0, sw // 2, sh]
+    if name == "right-half":
+        return [sw // 2, 0, sw - sw // 2, sh]
+    if name == "top-half":
+        return [0, 0, sw, sh // 2]
+    if name == "bottom-half":
+        return [0, sh // 2, sw, sh - sh // 2]
+    if name == "center-720p":
+        w, h = 1280, 720
+        left = max(0, (sw - w) // 2)
+        top = max(0, (sh - h) // 2)
+        return [left, top, w, h]
+    raise SystemExit(f"unknown preset: {name}")
 
 
 class _RegionAction(argparse.Action):
@@ -56,7 +93,7 @@ class _RegionAction(argparse.Action):
         setattr(namespace, self.dest, ints)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Good-Badminton real-time source")
     p.add_argument("--source", required=True, choices=["screen_capture", "browser_headless"])
     p.add_argument("--fps", type=float, default=30.0, help="Output video fps (default 30)")
@@ -68,9 +105,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ball-model", default="weights/yolo11s-ball.pt")
     p.add_argument("--display-overlay", choices=["true", "false"], default="true",
                    help="Whether to draw overlays (skeletons/trajectories)")
-    p.add_argument("--region", nargs="*", action=_RegionAction, default=[100, 100, 1280, 720],
+    p.add_argument("--region", nargs="*", action=_RegionAction, default=None,
                    metavar="L T W H",
-                   help="(screen_capture) region to grab; accepts L T W H or L,T,W,H")
+                   help="(screen_capture) custom region; required when --preset=custom")
+    p.add_argument("--preset", default="fullscreen",
+                   choices=["fullscreen", "left-half", "right-half", "top-half",
+                            "bottom-half", "center-720p", "custom"],
+                   help="(screen_capture) region preset; default: fullscreen")
     p.add_argument("--url", default="", help="(browser_headless) URL to open")
     p.add_argument("--chrome-path", default=r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                    help="(browser_headless) chrome.exe path")
@@ -79,11 +120,62 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--wait-sec", type=float, default=10.0)
     p.add_argument("--interactive", action="store_true",
                    help="Show OpenCV court annotation window (default: auto-accept non-interactively)")
-    return p.parse_args()
+    p.add_argument("--no-court", action="store_true",
+                   help="Skip court annotation entirely; analyze the whole frame as-is")
+    p.add_argument("--preview", action="store_true",
+                   help="Grab one frame and save it, then exit (no analysis)")
+    p.add_argument("--preview-out", default=None,
+                   help="Path to save preview frame (default: outputs/preview_<timestamp>.png)")
+    return p.parse_args(argv)
+
+
+def build_source(args: argparse.Namespace):
+    if args.source == "screen_capture":
+        region = _resolve_preset(args.preset, args.region)
+        left, top, width, height = region
+        return ScreenCaptureSource(left=left, top=top, width=width, height=height), region
+    if args.source == "browser_headless":
+        src = HeadlessBrowserSource(
+            url=args.url,
+            chrome_path=args.chrome_path,
+            width=args.browser_w,
+            height=args.browser_h,
+            wait_sec=args.wait_sec,
+        )
+        return src, None
+    raise ValueError(f"Unknown source: {args.source}")
+
+
+def do_preview(args: argparse.Namespace) -> int:
+    """Grab a single frame and save to a PNG. No analysis, no models loaded."""
+    source, region = build_source(args)
+    if not source.open():
+        print(f"[preview] failed to open {args.source}", file=sys.stderr)
+        return 2
+    res = source.next_frame()
+    source.close()
+    if not res.ok or res.frame is None:
+        print(f"[preview] failed to grab frame: {res.error}", file=sys.stderr)
+        return 2
+    if args.preview_out:
+        out_path = args.preview_out
+    else:
+        os.makedirs("outputs", exist_ok=True)
+        out_path = os.path.join("outputs", f"preview_{int(time.time())}.png")
+    cv2.imwrite(out_path, res.frame)
+    h, w = res.frame.shape[:2]
+    print(f"[preview] saved {out_path} ({w}x{h})")
+    if region is not None:
+        print(f"[preview] region: left={region[0]} top={region[1]} {region[2]}x{region[3]}")
+    return 0
 
 
 def main() -> None:
     args = parse_args()
+
+    if args.preview:
+        raise SystemExit(do_preview(args))
+
     from .system import BadmintonAnalysisSystem, load_runtime_dependencies
     load_runtime_dependencies()
 
@@ -93,7 +185,9 @@ def main() -> None:
 
     print(f"[live] run_id={run_id}")
     print(f"[live] opening source: {args.source}")
-    source = build_source(args)
+    source, region = build_source(args)
+    if region is not None:
+        print(f"[live] region: left={region[0]} top={region[1]} {region[2]}x{region[3]}")
     if not source.open():
         raise SystemExit(f"[live] failed to open {args.source}")
     print("[live] source opened")
@@ -128,6 +222,7 @@ def main() -> None:
         show_player_stats=args.display_overlay == "true",
         frame_source=adapter,
         non_interactive_annotation=not args.interactive,
+        skip_court_annotation=args.no_court,
     )
     system.keep_audio = False
 
