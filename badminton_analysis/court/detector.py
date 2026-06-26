@@ -323,12 +323,12 @@ def _score_court_quad(corners, image_shape, lines, line_mask, horizontal_lines):
 def _order_corners_tl_tr_br_bl(pts):
     """Order 4 points as TL, TR, BR, BL (top-left, top-right, bottom-right, bottom-left)."""
     pts = np.array(pts, dtype=np.float32)
-    s = pts.sum(axis=1)
-    d = np.diff(pts, axis=1).flatten()
-    tl = pts[np.argmin(s)]   # smallest x+y -> top-left
-    br = pts[np.argmax(s)]   # largest x+y -> bottom-right
-    tr = pts[np.argmax(d)]   # largest x-y -> top-right (right side, small y)
-    bl = pts[np.argmin(d)]   # smallest x-y -> bottom-left (left side, large y)
+    s = pts.sum(axis=1)               # x + y
+    d = pts[:, 0] - pts[:, 1]         # x - y
+    tl = pts[np.argmin(s)]            # smallest x+y -> top-left
+    br = pts[np.argmax(s)]            # largest x+y -> bottom-right
+    tr = pts[np.argmax(d)]            # largest x-y -> top-right
+    bl = pts[np.argmin(d)]            # smallest x-y -> bottom-left
     return [tuple(v.astype(int)) for v in (tl, tr, br, bl)]
 
 
