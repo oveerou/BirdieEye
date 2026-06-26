@@ -94,6 +94,14 @@ def _make_screen_source(region: list[int]) -> ScreenCaptureSource:
 
 with st.sidebar:
     st.header("参数设置")
+    # GPU info (small, at the top so the user can see what's actually available)
+    try:
+        import torch
+        cuda_avail = torch.cuda.is_available()
+        gpu_name = torch.cuda.get_device_name(0) if cuda_avail else "CPU only"
+        st.caption(f"GPU: {gpu_name}" if cuda_avail else f"GPU: {gpu_name} (CUDA 不可用)")
+    except Exception as e:
+        st.caption(f"GPU: 探测失败 ({e})")
     source_type = st.selectbox(
         "视频源类型",
         list(SOURCE_LABELS.keys()),
@@ -209,7 +217,7 @@ def _build_source():
 
 def _save_results(summary, run_id):
     if summary.get("total_frames", 0) <= 0:
-        return None
+        return (None, None)
     if not run_id:
         run_id = f"run_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     run_dir = RUNS_DIR / run_id
@@ -345,6 +353,7 @@ if start_btn and not st.session_state["running"]:
                     frame_source=adapter,
                     non_interactive_annotation=True,
                     skip_court_annotation=no_court,
+                    device=device if device != "auto" else None,
                 )
                 system.keep_audio = False
                 _run_inference_thread(system, adapter, run_id, save_dir)

@@ -60,16 +60,16 @@ def load_runtime_dependencies():
     SCHEMA_VERSION = _SCHEMA_VERSION
 
 class BadmintonAnalysisSystem:
-    def __init__(self, video_path, show_display=True, 
-                 show_skeletons=True, show_player_trajectories=True, 
+    def __init__(self, video_path, show_display=True,
+                 show_skeletons=True, show_player_trajectories=True,
                  show_court_trajectory=True, show_shuttlecock_trajectory=True,
-                 show_player_stats=True, show_performance_stats=False, 
+                 show_player_stats=True, show_performance_stats=False,
                  save_images=False, language='zh', output_dir=None,
                  ball_model_path='weights/yolo11s-ball.pt', template_path=None,
                  pose_mode='balanced', pose_family='rtmpose',
                  yolo_pose_model='yolo11n-pose.pt', show_pose_roi=True,
                  frame_source=None, non_interactive_annotation=False,
-                 skip_court_annotation=False):
+                 skip_court_annotation=False, device=None):
         self.video_path = video_path
         self.show_display = show_display
         self.language = language
@@ -82,6 +82,7 @@ class BadmintonAnalysisSystem:
         self.frame_source = frame_source
         self.non_interactive_annotation = non_interactive_annotation
         self.skip_court_annotation = skip_court_annotation
+        self.device = device
         self.display_queue: "queue.Queue | None" = None
 
 
@@ -106,10 +107,12 @@ class BadmintonAnalysisSystem:
             )
         
         if self.pose_family == 'yolo-pose':
-            self.rtmpose_processor = YOLOPoseProcessor(model_path=self.yolo_pose_model)
+            self.rtmpose_processor = YOLOPoseProcessor(
+                model_path=self.yolo_pose_model, device=self.device,
+            )
         else:
             self.rtmpose_processor = RTMPoseProcessor(mode=self.pose_mode, pose_family=self.pose_family)
-        self.yolo_ball_model = YOLO(self.ball_model_path)
+        self.yolo_ball_model = YOLO(self.ball_model_path, device=self.device)
 
         self.last_stats_update_frame = 0
 
