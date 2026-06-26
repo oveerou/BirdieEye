@@ -63,6 +63,8 @@ class CourtHeatmap:
 
     def overlay_on(self, frame_bgr: np.ndarray, position: str = "bottom-right",
                    size: tuple = (240, 130)) -> np.ndarray:
+        if not self.upper_events and not self.lower_events:
+            return frame_bgr
         minimap = self.render_minimap()
         minimap = cv2.resize(minimap, size)
         fh, fw = frame_bgr.shape[:2]

@@ -373,7 +373,8 @@ class BadmintonAnalysisSystem:
                     self.heatmap.add(latest[0], latest[1], half, t=now)
                 except Exception:
                     pass
-        if self.show_heatmap and self.heatmap is not None and frame is not None:
+        if self.show_heatmap and self.heatmap is not None and frame is not None \
+                and (self.heatmap.upper_events or self.heatmap.lower_events):
             try:
                 self.heatmap.overlay_on(frame)
             except Exception:
