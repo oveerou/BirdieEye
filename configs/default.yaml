@@ -1,0 +1,13 @@
+default_model: weights/yolo11n-pose.pt
+imgsz: 960
+conf: 0.25
+frame_skip: 1
+save_output: false
+screen_region:
+  left: 100
+  top: 100
+  width: 1280
+  height: 720
+outputs_dir: outputs
+runs_dir: outputs/runs
+uploads_dir: outputs/uploads
