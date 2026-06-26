@@ -66,7 +66,8 @@ class BadmintonAnalysisSystem:
                  save_images=False, language='zh', output_dir=None,
                  ball_model_path='weights/yolo11s-ball.pt', template_path=None,
                  pose_mode='balanced', pose_family='rtmpose',
-                 yolo_pose_model='yolo11n-pose.pt', show_pose_roi=True):
+                 yolo_pose_model='yolo11n-pose.pt', show_pose_roi=True,
+                 frame_source=None):
         self.video_path = video_path
         self.show_display = show_display
         self.language = language
@@ -76,6 +77,7 @@ class BadmintonAnalysisSystem:
         self.pose_family = pose_family
         self.yolo_pose_model = yolo_pose_model
         self.show_pose_roi = show_pose_roi
+        self.frame_source = frame_source
 
 
         self.show_skeletons = show_skeletons
@@ -163,7 +165,7 @@ class BadmintonAnalysisSystem:
         """Process the input video."""
         self.start_time = time.time()
 
-        cap = cv2.VideoCapture(self.video_path)
+        cap = self.frame_source if self.frame_source is not None else cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
             raise RuntimeError(f"Unable to open video: {self.video_path}")
 
@@ -171,7 +173,10 @@ class BadmintonAnalysisSystem:
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         if fps <= 0:
             raise RuntimeError(f"Unable to read FPS from video: {self.video_path}")
-        video_duration = total_frames / fps
+        if total_frames > 0:
+            video_duration = total_frames / fps
+        else:
+            video_duration = 0
         
 
         self.fps = fps
@@ -372,7 +377,9 @@ class BadmintonAnalysisSystem:
         if frame is not None:
             if self.show_display:
                 cv2.imshow('frame', frame)
-                cv2.waitKey(1)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q') or cv2.getWindowProperty('frame', cv2.WND_PROP_VISIBLE) < 1:
+                    raise KeyboardInterrupt
             out.write(frame)
 
             if self.save_images:
