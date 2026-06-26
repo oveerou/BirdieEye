@@ -1,4 +1,4 @@
-﻿import os
+import os
 import queue
 import tempfile
 from tkinter import filedialog
@@ -69,7 +69,9 @@ class BadmintonAnalysisSystem:
                  pose_mode='balanced', pose_family='rtmpose',
                  yolo_pose_model='yolo11n-pose.pt', show_pose_roi=True,
                  frame_source=None, non_interactive_annotation=False,
-                 skip_court_annotation=False, device=None):
+                 skip_court_annotation=False, device=None,
+                 court_update_interval=8.0, court_update_min_quality=0.5,
+                 show_heatmap=True, heatmap_window=120.0):
         self.video_path = video_path
         self.show_display = show_display
         self.language = language
@@ -83,7 +85,16 @@ class BadmintonAnalysisSystem:
         self.non_interactive_annotation = non_interactive_annotation
         self.skip_court_annotation = skip_court_annotation
         self.device = device
+        self.court_update_interval = float(court_update_interval)
+        self.court_update_min_quality = float(court_update_min_quality)
+        self.show_heatmap = bool(show_heatmap)
+        self.heatmap_window = float(heatmap_window)
         self.display_queue: "queue.Queue | None" = None
+        # Court/heatmap state, populated after _setup_court_annotation
+        self.court_corners: list | None = None
+        self.court_roi_corners: list | None = None
+        self.mid_height: int | None = None
+        self.court_mapper = None
 
 
         self.show_skeletons = show_skeletons
@@ -113,6 +124,11 @@ class BadmintonAnalysisSystem:
         else:
             self.rtmpose_processor = RTMPoseProcessor(mode=self.pose_mode, pose_family=self.pose_family)
         self.yolo_ball_model = YOLO(self.ball_model_path)
+
+        # In-play court model updater + real-time heatmap (initialized in
+        # process_video after _setup_court_annotation has set court_corners).
+        self.court_updater = None
+        self.heatmap = None
 
         self.last_stats_update_frame = 0
 
@@ -335,9 +351,33 @@ class BadmintonAnalysisSystem:
         shuttle_draw_elapsed = time.time() - shuttle_draw_t0
         
 
-        players = self.player_tracker.update(frame_count, centroids, ball_position, 
+        players = self.player_tracker.update(frame_count, centroids, ball_position,
                                              point_left_hands, point_right_hands, detect_frame_count)
-        
+
+
+        # In-play court model refresh + sliding-window heatmap.
+        if is_court and self.court_updater is not None:
+            try:
+                self.court_updater.maybe_update(frame, len(players))
+            except Exception:
+                pass
+            now = time.time()
+            for half in ("upper", "lower"):
+                history = self.player_tracker.court_history.get(half)
+                if not history:
+                    continue
+                latest = history[-1]
+                if latest is None:
+                    continue
+                try:
+                    self.heatmap.add(latest[0], latest[1], half, t=now)
+                except Exception:
+                    pass
+        if self.show_heatmap and self.heatmap is not None and frame is not None:
+            try:
+                self.heatmap.overlay_on(frame)
+            except Exception:
+                pass
 
         if frame_count == 1 or not self.cached_movement_stats:
             self.cached_movement_stats = self.player_tracker.get_player_movement_stats()
@@ -503,6 +543,22 @@ class BadmintonAnalysisSystem:
             f.write(f"corners={corners}\n")
             f.write(f"roi_corners={roi_corners}\n")
             f.write(f"mid_height={mid_height}\n")
+        # Cache on the system so the updater / display pipeline can read them.
+        self.court_corners = list(corners)
+        self.court_roi_corners = list(roi_corners)
+        self.mid_height = int(mid_height)
+        # Initialize the in-play updater + heatmap now that we have a model.
+        from .court.updater import CourtModelUpdater
+        from .analytics.heatmap import CourtHeatmap
+        self.court_updater = CourtModelUpdater(
+            self,
+            check_interval_sec=self.court_update_interval,
+            min_quality=self.court_update_min_quality,
+        )
+        self.heatmap = CourtHeatmap()
+        # Allow per-run override of heatmap window without mutating the class.
+        if self.heatmap_window != CourtHeatmap.WINDOW_SEC:
+            self.heatmap.WINDOW_SEC = self.heatmap_window
         return corners, roi_corners, mid_height
 
     def _cleanup(self, cap):
