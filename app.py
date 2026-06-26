@@ -29,6 +29,7 @@ from badminton_analysis.sources import (
     HeadlessBrowserSource,
     ScreenCaptureSource,
     StreamAdapter,
+    VideoFileSource,
 )
 from badminton_analysis.storage import (
     RunMetrics,
