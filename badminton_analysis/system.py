@@ -1,4 +1,5 @@
 ﻿import os
+import queue
 import tempfile
 from tkinter import filedialog
 import tkinter as tk
@@ -81,6 +82,7 @@ class BadmintonAnalysisSystem:
         self.frame_source = frame_source
         self.non_interactive_annotation = non_interactive_annotation
         self.skip_court_annotation = skip_court_annotation
+        self.display_queue: "queue.Queue | None" = None
 
 
         self.show_skeletons = show_skeletons
@@ -390,7 +392,21 @@ class BadmintonAnalysisSystem:
 
             if self.save_images:
                 cv2.imwrite(os.path.join(self.images_save_dir, f"{frame_count}.png"), frame)
+        # Push to web UI queue if attached.
+        if self.display_queue is not None and frame is not None:
+            try:
+                self.display_queue.put_nowait((frame, detect_frame_count))
+            except queue.Full:
+                try:
+                    self.display_queue.get_nowait()
+                    self.display_queue.put_nowait((frame, detect_frame_count))
+                except Exception:
+                    pass
         return frame, detect_frame_count
+
+    def process_frame(self, frame, template_gray, corners, roi_corners, frame_count, out, detect_frame_count):
+        """Public alias for _process_frame, used by the Streamlit Web UI."""
+        return self._process_frame(frame, template_gray, corners, roi_corners, frame_count, out, detect_frame_count)
 
     def _get_template_path(self):
         """Get the court template image path."""
