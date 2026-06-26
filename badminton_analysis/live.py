@@ -126,6 +126,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Grab one frame and save it, then exit (no analysis)")
     p.add_argument("--preview-out", default=None,
                    help="Path to save preview frame (default: outputs/preview_<timestamp>.png)")
+    p.add_argument("--court-update-interval", type=float, default=8.0,
+                   help="Court model re-check interval (seconds, default 8)")
+    p.add_argument("--no-heatmap", action="store_true",
+                   help="Disable real-time heatmap overlay")
+    p.add_argument("--heatmap-window", type=float, default=120.0,
+                   help="Heatmap sliding window (seconds, default 120)")
     return p.parse_args(argv)
 
 
@@ -223,6 +229,10 @@ def main() -> None:
         frame_source=adapter,
         non_interactive_annotation=not args.interactive,
         skip_court_annotation=args.no_court,
+        court_update_interval=args.court_update_interval,
+        show_heatmap=not args.no_heatmap,
+        heatmap_window=args.heatmap_window,
+        enable_court_updater=True,
     )
     system.keep_audio = False
 

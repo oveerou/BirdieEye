@@ -123,6 +123,11 @@ with st.sidebar:
         st.caption("⚠️ 屏幕源未勾选跳过：自动检测大概率会失败，建议勾上")
     show_raw = st.checkbox("显示原始画面（调试用）", False)
     save_output = st.checkbox("保存标注视频", cfg.save_output)
+    with st.expander("高级: 球场自动更新 + 热力图", expanded=False):
+        court_update_interval = st.slider("球场模型检查间隔 (秒)", 2.0, 60.0, 8.0, step=1.0)
+        court_update_min_quality = st.slider("球场更新最低质量", 0.1, 1.0, 0.5, step=0.05)
+        show_heatmap = st.checkbox("启用实时热力图 (2 分钟滑动窗口)", True)
+        heatmap_window = st.slider("热力图滑动窗口 (秒)", 30, 600, 120, step=30)
     st.divider()
     start_btn = st.button("开始识别", type="primary")
     stop_btn = st.button("停止识别")
@@ -386,6 +391,11 @@ if start_btn and not st.session_state["running"]:
                     non_interactive_annotation=True,
                     skip_court_annotation=no_court,
                     device=device if device != "auto" else None,
+                    court_update_interval=court_update_interval,
+                    court_update_min_quality=court_update_min_quality,
+                    show_heatmap=show_heatmap,
+                    heatmap_window=heatmap_window,
+                    enable_court_updater=True,
                 )
                 system.keep_audio = False
                 _run_inference_thread(system, adapter, run_id, save_dir)
