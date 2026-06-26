@@ -17,10 +17,11 @@ class CourtHeatmap:
     GRID_W = 60
     GRID_H = 130
     WINDOW_SEC = 120.0  # 2 minutes
+    MAX_EVENTS = 36000  # safety cap: 30 fps * 120 s
 
     def __init__(self):
-        self.upper_events: deque = deque()
-        self.lower_events: deque = deque()
+        self.upper_events: deque = deque(maxlen=self.MAX_EVENTS)
+        self.lower_events: deque = deque(maxlen=self.MAX_EVENTS)
 
     def add(self, x_m: float, y_m: float, half: str, t: Optional[float] = None) -> None:
         if t is None:

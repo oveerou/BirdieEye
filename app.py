@@ -297,11 +297,14 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
         st.info(f"识别中... run_id={run_id}（按停止识别或 Ctrl+C 中断）")
 
     last_metrics = {"total_frames": 0, "avg_fps": 0.0, "total_rallies": 0}
-    # Throttle display updates: max 15 fps. Calling st.image() at 30+ fps
+    # Throttle display updates: max 10 fps. Calling st.image() at 30+ fps
     # overwhelms Streamlit's websocket and freezes the UI.
     last_display = 0.0
-    display_interval = 1.0 / 15.0
+    display_interval = 1.0 / 10.0
     last_stats_update = 0.0
+    # Downscale display frames to keep websocket payload small.
+    display_max_w = 960
+    import time as _time_mod
     while st.session_state.get("running", False) and not stop_event.is_set():
         try:
             item = display_q.get(timeout=0.2)
@@ -309,22 +312,35 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
             continue
         if item[0] is None:  # END sentinel (frame items are np.ndarray, never None)
             break
-        now = time.time()
+        now = _time_mod.time()
         if now - last_display < display_interval:
             # Drop frame for display; worker keeps producing at full rate.
             continue
         last_display = now
         frame_bgr, _idx = item
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        frame_ph.image(Image.fromarray(rgb), channels="RGB", use_container_width=True)
+        # Resize for display: keep aspect ratio, max width 960
+        try:
+            h, w = frame_bgr.shape[:2]
+            if w > display_max_w:
+                scale = display_max_w / w
+                new_w = display_max_w
+                new_h = int(h * scale)
+                frame_bgr = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            frame_ph.image(Image.fromarray(rgb), channels="RGB", use_container_width=True)
+        except Exception as e:
+            print(f"[display] image error: {e}")
         last_metrics["total_frames"] = _idx + 1
-        # Stats panel: only update every ~0.5s to reduce markdown re-render cost
-        if now - last_stats_update >= 0.5:
+        # Stats panel: only update every ~1.0s to reduce markdown re-render cost
+        if now - last_stats_update >= 1.0:
             last_stats_update = now
-            stats_ph.markdown(
-                f"**FPS** (实时)\n\n**Frame** {_idx}\n\n"
-                f"**Status** running\n\n**Source** {source_type}"
-            )
+            try:
+                stats_ph.markdown(
+                    f"**FPS** (实时)\n\n**Frame** {_idx}\n\n"
+                    f"**Status** running\n\n**Source** {source_type}"
+                )
+            except Exception:
+                pass
 
     t.join(timeout=5)
     st.session_state["running"] = False
