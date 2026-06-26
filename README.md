@@ -351,6 +351,38 @@ start.bat
 - 跑长视频建议提高 `frame_skip` 节省 GPU
 
 
+## 球场模型自动更新 + 实时热力图
+
+比赛过程中，球员的"全场画面"（两人清晰可见 + 帧清晰）会用来自动刷新球场模型；2 分钟滑动窗口热力图（上下半场分图）实时叠加在 output 视频右下角。
+
+### 行为
+
+- 每 `--court-update-interval` 秒（默认 8 秒）检查一次当前帧
+- 质量评分：≥2 个球员 + Laplacian 方差 > 30；分数需 ≥ `--court-update-min-quality`（默认 0.5）
+- 通过质量 + 角点距离合理性（任意角点偏离 < 100px）才接受
+- 接受后写 `outputs/<run>/court_annotations.txt` 持久化，并立即更新 `court_mapper`，让后续帧的姿态映射跟随新模型
+
+热力图每个 frame 把球员的 court 坐标位置入队，过期（> `--heatmap-window` 秒）自动剔除。上半场、下半场各画一张，合成一张 240x130 minimap 叠加到画面右下角。
+
+### CLI 标志
+
+```bash
+python -m badminton_analysis.live --source screen_capture \
+       --court-update-interval 5 --heatmap-window 60 --no-heatmap
+```
+
+| 标志 | 默认 | 说明 |
+|---|---|---|
+| `--court-update-interval` | 8.0 | 球场模型重新检查间隔（秒） |
+| `--court-update-min-quality` | 0.5 | 最低质量分数（0-1） |
+| `--no-heatmap` | False | 关闭热力图叠加 |
+| `--heatmap-window` | 120.0 | 热力图滑动窗口（秒） |
+
+Streamlit 侧栏"高级"折叠区可调。
+
+> 注：`main.py`（本地文件分析）默认 `enable_court_updater=False`，保持与原版 byte-level 一致；球场自动更新只在 `live.py` / Streamlit 实时源里启用。
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)

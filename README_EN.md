@@ -353,6 +353,38 @@ After the run, results are written to `outputs/football.db` (SQLite) and the bot
 - For long videos, raise `frame_skip` to save GPU.
 
 
+## Court model auto-update + real-time heatmap
+
+During playback, "full-court" frames (two players clearly visible + sharp image) are used to automatically refresh the court model. A 2-minute sliding-window heatmap (upper/lower halves shown separately) is overlaid in the bottom-right of the output video in real time.
+
+### Behavior
+
+- Every `--court-update-interval` seconds (default 8), the current frame is checked.
+- Quality score: >= 2 players visible AND Laplacian variance > 30; the score must be >= `--court-update-min-quality` (default 0.5).
+- The update is accepted only if a new detection exists and all corners are within 100 px of the prior model.
+- On accept: write `outputs/<run>/court_annotations.txt` and swap the system's `court_mapper`, so subsequent frames re-use the new model.
+
+The heatmap pushes one event per frame (player position in court coordinates). Events older than `--heatmap-window` seconds are evicted. The minimap (240x130) overlays in the bottom-right.
+
+### CLI flags
+
+```bash
+python -m badminton_analysis.live --source screen_capture \
+       --court-update-interval 5 --heatmap-window 60 --no-heatmap
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--court-update-interval` | 8.0 | Seconds between court re-checks |
+| `--court-update-min-quality` | 0.5 | Minimum quality score (0-1) |
+| `--no-heatmap` | False | Disable the heatmap overlay |
+| `--heatmap-window` | 120.0 | Sliding window in seconds |
+
+The Streamlit sidebar "Advanced" expander exposes the same controls.
+
+> Note: `main.py` (local-file analysis) defaults to `enable_court_updater=False` to keep the byte-level regression identical. The updater is only enabled in `live.py` / Streamlit real-time sources.
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)
