@@ -112,7 +112,15 @@ with st.sidebar:
     imgsz = st.slider("imgsz (推理分辨率)", 320, 1280, cfg.imgsz, step=64)
     conf = st.slider("置信度阈值 conf", 0.05, 0.9, cfg.conf, step=0.05)
     frame_skip = st.slider("帧跳过 frame_skip", 1, 10, cfg.frame_skip, step=1)
-    no_court = st.checkbox("跳过球场自动检测 (--no-court)", False)
+    # 屏幕源默认勾上"跳过"：屏幕里通常没球场，自动检测会失败
+    no_court_default = source_type == "screen_capture"
+    no_court = st.checkbox(
+        "跳过球场自动检测 (--no-court)",
+        value=no_court_default,
+        help="屏幕源推荐勾选；无勾选时需画面有清晰球场线才能自动识别",
+    )
+    if source_type == "screen_capture" and not no_court:
+        st.caption("⚠️ 屏幕源未勾选跳过：自动检测大概率会失败，建议勾上")
     show_raw = st.checkbox("显示原始画面（调试用）", False)
     save_output = st.checkbox("保存标注视频", cfg.save_output)
     st.divider()
@@ -257,14 +265,17 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
     """Spawn a background thread that drives process_video and pushes frames."""
     st.session_state["running"] = True
     st.session_state["current_run_id"] = run_id
+    st.session_state["last_error"] = None
     display_q: queue.Queue = queue.Queue(maxsize=2)
     system.display_queue = display_q
     stop_event = threading.Event()
+    worker_error: dict = {}
 
     def worker():
         try:
             system.process_video()
         except Exception as e:
+            worker_error["error"] = repr(e)
             print(f"[worker] error: {e}")
         finally:
             stop_event.set()
@@ -278,7 +289,7 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
     t.start()
 
     with status_box:
-        st.info(f"识别中... run_id={run_id}")
+        st.info(f"识别中... run_id={run_id}（按停止识别或 Ctrl+C 中断）")
 
     last_metrics = {"total_frames": 0, "avg_fps": 0.0, "total_rallies": 0}
     while st.session_state.get("running", False) and not stop_event.is_set():
@@ -299,6 +310,14 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
 
     t.join(timeout=5)
     st.session_state["running"] = False
+
+    # Show worker error in UI if any
+    if "error" in worker_error:
+        st.session_state["last_error"] = worker_error["error"]
+        with status_box:
+            st.error(f"识别失败: {worker_error['error']}")
+            st.caption("提示: 屏幕源请勾选'跳过球场自动检测'，或换一个清晰球场画面")
+
     summary = {
         "total_frames": last_metrics["total_frames"],
         "avg_fps": 0.0, "avg_player_count": 0.0,
@@ -313,6 +332,12 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
     if rd:
         st.session_state["last_metrics"] = summary
         st.session_state["last_run_dir"] = rd
+    # Rerun so the error/result is visible immediately (Streamlit otherwise
+    # would only show it on the next user interaction).
+    try:
+        st.rerun()
+    except Exception:
+        pass
 
 
 if start_btn and not st.session_state["running"]:
