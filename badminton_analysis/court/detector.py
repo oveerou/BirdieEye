@@ -320,9 +320,103 @@ def _score_court_quad(corners, image_shape, lines, line_mask, horizontal_lines):
     return area_score + height_score + perspective_score + center_x_score + center_y_score + bottom_score + edge_score + line_score + support_score + alignment_score + pattern_score
 
 
-def auto_detect_court_corners(image):
+def _order_corners_tl_tr_br_bl(pts):
+    """Order 4 points as TL, TR, BR, BL (top-left, top-right, bottom-right, bottom-left)."""
+    pts = np.array(pts, dtype=np.float32)
+    s = pts.sum(axis=1)
+    d = np.diff(pts, axis=1).flatten()
+    tl = pts[np.argmin(s)]   # smallest x+y -> top-left
+    br = pts[np.argmax(s)]   # largest x+y -> bottom-right
+    tr = pts[np.argmax(d)]   # largest x-y -> top-right (right side, small y)
+    bl = pts[np.argmin(d)]   # smallest x-y -> bottom-left (left side, large y)
+    return [tuple(v.astype(int)) for v in (tl, tr, br, bl)]
+
+
+def _quad_aspect(corners):
+    """Return width/height ratio (>=1) of an ordered (TL,TR,BR,BL) quad. 0 if degenerate."""
+    if len(corners) != 4:
+        return 0.0
+    tl, tr, br, bl = corners
+    top_w = ((tr[0] - tl[0]) ** 2 + (tr[1] - tl[1]) ** 2) ** 0.5
+    bot_w = ((br[0] - bl[0]) ** 2 + (br[1] - bl[1]) ** 2) ** 0.5
+    left_h = ((bl[0] - tl[0]) ** 2 + (bl[1] - tl[1]) ** 2) ** 0.5
+    right_h = ((br[0] - tr[0]) ** 2 + (br[1] - tr[1]) ** 2) ** 0.5
+    width = (top_w + bot_w) / 2.0
+    height = (left_h + right_h) / 2.0
+    if width <= 0 or height <= 0:
+        return 0.0
+    return max(width, height) / min(width, height)
+
+
+# Court is 6.1 x 13.4 m, aspect 2.2. Allow perspective tilt range.
+COURT_ASPECT_MIN = 1.4
+COURT_ASPECT_MAX = 4.5
+
+
+def detect_court_by_color(image, color: str = "red"):
+    """Color-threshold based court detector. Fast and reliable for BWF red/green courts.
+
+    Returns 4 corners ordered TL, TR, BR, BL, or None if no suitable region is found.
+    """
+    h, w = image.shape[:2]
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    if color == "red":
+        # Red wraps around in HSV (hue 0 and 180 are both red).
+        lower1 = np.array([0, 80, 50])
+        upper1 = np.array([10, 255, 255])
+        lower2 = np.array([170, 80, 50])
+        upper2 = np.array([180, 255, 255])
+        mask = cv2.inRange(hsv, lower1, upper1) | cv2.inRange(hsv, lower2, upper2)
+    elif color == "green":
+        lower = np.array([35, 60, 50])
+        upper = np.array([85, 255, 255])
+        mask = cv2.inRange(hsv, lower, upper)
+    else:
+        return None
+
+    # Morphological cleanup: close holes, then drop small specks
+    kernel = np.ones((7, 7), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    largest = max(contours, key=cv2.contourArea)
+    area = cv2.contourArea(largest)
+    # A real BWF court fills >= ~30% of the frame; logos/grass outside the
+    # court are usually smaller. Reject them to avoid false positives.
+    if area < 0.30 * h * w:
+        return None
+    hull = cv2.convexHull(largest)
+    peri = cv2.arcLength(hull, True)
+    approx = cv2.approxPolyDP(hull, 0.02 * peri, True)
+    if len(approx) == 4:
+        pts = approx.reshape(-1, 2)
+    else:
+        rect = cv2.minAreaRect(hull)
+        pts = cv2.boxPoints(rect)
+    corners = _order_corners_tl_tr_br_bl(pts)
+    # Reject shapes that don't look like a badminton court aspect ratio.
+    aspect = _quad_aspect(corners)
+    if not (COURT_ASPECT_MIN <= aspect <= COURT_ASPECT_MAX):
+        return None
+    return corners
+
+
+def auto_detect_court_corners(image, preferred_color: str = "red"):
+    # Fast path: color-threshold for BWF red/green courts.
+    for color in (preferred_color, "red" if preferred_color != "red" else "green"):
+        if color is None:
+            continue
+        corners = detect_court_by_color(image, color=color)
+        if corners is not None:
+            debug = {"method": "color", "color": color}
+            return corners, None, debug
+
+    # Fallback: Hough-line based detection (works on any surface).
     horizontal_lines, side_lines, mask = detect_court_line_segments(image)
-    debug = {"horizontal": horizontal_lines, "side": side_lines, "score": None}
+    debug = {"method": "line", "horizontal": horizontal_lines, "side": side_lines, "score": None}
     if len(horizontal_lines) < 2 or len(side_lines) < 2:
         return None, mask, debug
 
