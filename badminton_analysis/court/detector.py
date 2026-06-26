@@ -333,16 +333,16 @@ def _order_corners_tl_tr_br_bl(pts):
 
 
 def _quad_aspect(corners):
-    """Return width/height ratio (>=1) of an ordered (TL,TR,BR,BL) quad. 0 if degenerate."""
+    """Return width/height ratio (>=1) of an ordered (TL,TR,BR,BL) quad.
+
+    Uses the axis-aligned bounding box so perspective doesn't skew the ratio.
+    """
     if len(corners) != 4:
         return 0.0
-    tl, tr, br, bl = corners
-    top_w = ((tr[0] - tl[0]) ** 2 + (tr[1] - tl[1]) ** 2) ** 0.5
-    bot_w = ((br[0] - bl[0]) ** 2 + (br[1] - bl[1]) ** 2) ** 0.5
-    left_h = ((bl[0] - tl[0]) ** 2 + (bl[1] - tl[1]) ** 2) ** 0.5
-    right_h = ((br[0] - tr[0]) ** 2 + (br[1] - tr[1]) ** 2) ** 0.5
-    width = (top_w + bot_w) / 2.0
-    height = (left_h + right_h) / 2.0
+    xs = [p[0] for p in corners]
+    ys = [p[1] for p in corners]
+    width = max(xs) - min(xs)
+    height = max(ys) - min(ys)
     if width <= 0 or height <= 0:
         return 0.0
     return max(width, height) / min(width, height)
