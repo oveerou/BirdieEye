@@ -39,6 +39,11 @@ from badminton_analysis.storage import (
 )
 from badminton_analysis.system import BadmintonAnalysisSystem, load_runtime_dependencies
 
+# Eagerly load heavy runtime dependencies (YOLO model, etc.) once at app start,
+# so that subsequent "开始识别" clicks don't take 5-10s to spin up the model.
+with st.spinner("加载 YOLO 模型中（约 5-10 秒）..."):
+    load_runtime_dependencies()
+
 st.set_page_config(page_title="Good-Badminton 实时识别系统", layout="wide")
 st.title("基于 YOLO 的羽毛球比赛多源实时目标检测与分析系统")
 
@@ -191,7 +196,6 @@ def _build_source():
                 if not chunk:
                     break
                 f.write(chunk)
-        from badminton_analysis.sources.video_file import VideoFileSource
         return VideoFileSource(str(tmp)), None
     if source_type == "browser_headless":
         if not browser_url:
