@@ -71,7 +71,8 @@ class BadmintonAnalysisSystem:
                  frame_source=None, non_interactive_annotation=False,
                  skip_court_annotation=False, device=None,
                  court_update_interval=8.0, court_update_min_quality=0.5,
-                 show_heatmap=True, heatmap_window=120.0):
+                 show_heatmap=True, heatmap_window=120.0,
+                 enable_court_updater=False):
         self.video_path = video_path
         self.show_display = show_display
         self.language = language
@@ -89,6 +90,7 @@ class BadmintonAnalysisSystem:
         self.court_update_min_quality = float(court_update_min_quality)
         self.show_heatmap = bool(show_heatmap)
         self.heatmap_window = float(heatmap_window)
+        self.enable_court_updater = bool(enable_court_updater)
         self.display_queue: "queue.Queue | None" = None
         # Court/heatmap state, populated after _setup_court_annotation
         self.court_corners: list | None = None
@@ -551,11 +553,14 @@ class BadmintonAnalysisSystem:
         # Initialize the in-play updater + heatmap now that we have a model.
         from .court.updater import CourtModelUpdater
         from .analytics.heatmap import CourtHeatmap
-        self.court_updater = CourtModelUpdater(
-            self,
-            check_interval_sec=self.court_update_interval,
-            min_quality=self.court_update_min_quality,
-        )
+        if self.enable_court_updater:
+            self.court_updater = CourtModelUpdater(
+                self,
+                check_interval_sec=self.court_update_interval,
+                min_quality=self.court_update_min_quality,
+            )
+        else:
+            self.court_updater = None
         self.heatmap = CourtHeatmap()
         # Allow per-run override of heatmap window without mutating the class.
         if self.heatmap_window != CourtHeatmap.WINDOW_SEC:
