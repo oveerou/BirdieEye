@@ -34,6 +34,28 @@ def build_source(args: argparse.Namespace):
     raise ValueError(f"Unknown source: {args.source}")
 
 
+class _RegionAction(argparse.Action):
+    """Parse --region as either 'L,T,W,H' (one arg) or 'L T W H' (four args)."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if isinstance(values, str):
+            values = [values]
+        if len(values) == 1 and "," in values[0]:
+            parts = [p.strip() for p in values[0].split(",")]
+        else:
+            parts = list(values)
+        if len(parts) != 4:
+            parser.error(
+                f"argument {option_string}: expected 4 ints "
+                f"(L T W H or L,T,W,H), got {len(parts)}: {values!r}"
+            )
+        try:
+            ints = [int(p) for p in parts]
+        except ValueError as e:
+            parser.error(f"argument {option_string}: non-integer value: {e}")
+        setattr(namespace, self.dest, ints)
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Good-Badminton real-time source")
     p.add_argument("--source", required=True, choices=["screen_capture", "browser_headless"])
@@ -46,9 +68,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ball-model", default="weights/yolo11s-ball.pt")
     p.add_argument("--display-overlay", choices=["true", "false"], default="true",
                    help="Whether to draw overlays (skeletons/trajectories)")
-    p.add_argument("--region", type=int, nargs=4, default=[100, 100, 1280, 720],
-                   metavar=("LEFT", "TOP", "WIDTH", "HEIGHT"),
-                   help="(screen_capture) region to grab")
+    p.add_argument("--region", nargs="*", action=_RegionAction, default=[100, 100, 1280, 720],
+                   metavar="L T W H",
+                   help="(screen_capture) region to grab; accepts L T W H or L,T,W,H")
     p.add_argument("--url", default="", help="(browser_headless) URL to open")
     p.add_argument("--chrome-path", default=r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                    help="(browser_headless) chrome.exe path")
