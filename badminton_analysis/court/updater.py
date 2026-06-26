@@ -26,7 +26,7 @@ class CourtModelUpdater:
         self.system = system
         self.check_interval_sec = float(check_interval_sec)
         self.min_quality = float(min_quality)
-        self._last_check = 0.0
+        self._last_check = time.time()
         self._update_count = 0
         self._last_quality = 0.0
         self._last_status = "init"
