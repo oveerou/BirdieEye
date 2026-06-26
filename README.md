@@ -298,6 +298,59 @@ python -m badminton_analysis.live --source browser_headless --url "https://examp
 - macOS / Linux 屏幕捕获未经测试（mss 库支持但需自行验证）
 
 
+## Web 控制台 (Streamlit)
+
+除了 CLI（`main.py` / `live.py`），也提供 Streamlit Web 控制台。结构参考 `football-realtime-analyzer`（侧栏参数 + 主区实时画面 + 底部历史），检测层用羽毛球原生（YOLO Pose + 球检测 + 球场映射 + 上下半场球员追踪）。
+
+### 启动
+
+```bat
+:: 一键启动（首次会自动建 venv + 装依赖 + 起 Streamlit）
+start.bat
+
+:: 或手动
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.headless true --server.port 8501
+```
+
+浏览器打开 http://localhost:8501
+
+### 视频源
+
+侧栏选择三类源之一：
+- **本地视频**：上传 mp4/avi/mov（最大 4GB）
+- **网页直播**：粘 https URL，无头 Chrome 抓 `<video>` 元素
+- **屏幕捕获**：预设（全屏 / 左半 / 右半 / 上半 / 下半 / 中央 1280x720）或自定义矩形，可"预览捕获区域"
+
+### 实时统计
+
+右栏每帧刷新：
+- FPS / 帧号 / 设备
+- 检测球员数 / 羽毛球可见
+- 当前回合号
+- 上半场 + 下半场球员数 / 平均速度 / 累计移动距离
+
+跑完写入 SQLite `outputs/football.db`，底部表格可看历史。
+
+### 球场检测选项
+
+- 默认：自动检测（需画面有清晰球场线）+ 非交互模式
+- "跳过球场自动检测" 复选框：--no-court 模式，对任意内容都能跑（无球场映射）
+
+### 文件位置
+
+| 目录 | 内容 |
+|---|---|
+| `outputs/runs/run_<时间戳>_<id>/` | 每轮次的 `metrics.json` + 标注视频 |
+| `outputs/football.db` | SQLite 历史 |
+| `outputs/uploads/` | Web 上传的本地视频 |
+
+### 已知限制
+
+- 屏幕源非交互式（无 GUI 弹窗），所以"跳过球场自动检测"是屏幕源推荐选项
+- Streamlit 单用户；多人用需要鉴权层
+- 跑长视频建议提高 `frame_skip` 节省 GPU
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)

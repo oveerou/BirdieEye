@@ -300,6 +300,59 @@ Prerequisite: Google Chrome installed (default `C:\Program Files\Google\Chrome\A
 - macOS / Linux screen capture is untested (mss supports them but not verified here)
 
 
+## Web console (Streamlit)
+
+In addition to the CLI (`main.py` / `live.py`), a Streamlit web console is also provided. The structure mirrors `football-realtime-analyzer` (sidebar + main + history), with badminton-native detection (YOLO Pose + ball detection + court mapping + upper/lower player tracking).
+
+### Launch
+
+```bat
+:: One-click launch (creates venv + installs deps + starts Streamlit on first run)
+start.bat
+
+:: Or manual
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.headless true --server.port 8501
+```
+
+Open http://localhost:8501 in your browser.
+
+### Video sources
+
+The sidebar lets you pick one of three:
+- **Local video**: upload mp4/avi/mov (max 4 GB)
+- **Web live stream**: paste an https URL; headless Chrome grabs the `<video>` element
+- **Screen capture**: pick a preset (Fullscreen / Left half / Right half / Top half / Bottom half / Center 1280x720) or define a custom rectangle; a "Preview region" button is provided.
+
+### Real-time stats
+
+The right column refreshes each frame with:
+- FPS / frame index / device
+- Detected player count / shuttlecock visibility
+- Current rally id
+- Upper-court + lower-court player count / average speed / cumulative distance
+
+After the run, results are written to `outputs/football.db` (SQLite) and the bottom table shows the history.
+
+### Court detection options
+
+- Default: auto-detect (requires a clear court in the frame) + non-interactive mode
+- "Skip court auto-detection" checkbox: enables --no-court mode, which works on any content (no court mapping)
+
+### File locations
+
+| Directory | Contents |
+|---|---|
+| `outputs/runs/run_<timestamp>_<id>/` | per-run `metrics.json` + annotated video |
+| `outputs/football.db` | SQLite history |
+| `outputs/uploads/` | videos uploaded through the web UI |
+
+### Known limits
+
+- Screen source is non-interactive (no OpenCV popup), so "skip court auto-detection" is the recommended option for screen capture.
+- Streamlit is single-user; multi-user needs an auth layer.
+- For long videos, raise `frame_skip` to save GPU.
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)
