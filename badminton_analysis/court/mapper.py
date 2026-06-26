@@ -113,10 +113,15 @@ def compute_expanded_roi(court_corners, image_shape):
     return [(x1, y1), (x2, y2)]
 
 
-def annotate_court(image, auto_preview_path=None):
+def annotate_court(image, auto_preview_path=None, non_interactive=False):
     """
     Interactive tool to annotate court corners on an image.
     Returns court corners plus an automatically expanded ROI.
+
+    When `non_interactive=True`, the auto-detection result is accepted
+    immediately if available; if auto-detection fails, the function returns
+    `(None, None, None)` so the caller can raise a clear error. No OpenCV
+    windows are shown and no `cv2.waitKey` blocking occurs.
     """
     if not isinstance(image, np.ndarray):
         print("Error: Invalid image input")
@@ -132,6 +137,16 @@ def annotate_court(image, auto_preview_path=None):
         auto_preview = render_auto_court_preview(base_image, auto_corners, auto_roi_corners, auto_debug)
         if auto_preview_path:
             cv2.imwrite(auto_preview_path, auto_preview)
+
+        if non_interactive:
+            court_mapper = CourtMapper(auto_corners)
+            _, auto_mid_height = court_mapper.draw_court_overlay(base_image)
+            scale_x = original_width / fixed_size[0]
+            scale_y = original_height / fixed_size[1]
+            original_corners = [(int(x * scale_x), int(y * scale_y)) for x, y in auto_corners]
+            original_roi_corners = [(int(x * scale_x), int(y * scale_y)) for x, y in auto_roi_corners]
+            print(f"[court] auto-detected and accepted (non-interactive): {original_corners}")
+            return original_corners, original_roi_corners, int(auto_mid_height * scale_y)
 
         cv2.namedWindow("Auto court detection")
         cv2.imshow("Auto court detection", auto_preview)
@@ -151,6 +166,12 @@ def annotate_court(image, auto_preview_path=None):
             if key in (27, ord('m'), ord('M'), ord('r'), ord('R')):
                 cv2.destroyWindow("Auto court detection")
                 break
+    elif auto_preview_path:
+        cv2.imwrite(auto_preview_path, render_auto_court_preview(base_image, None, None, auto_debug))
+        if non_interactive:
+            print(f"[court] auto-detection failed; no manual fallback in non-interactive mode. Preview: {auto_preview_path}")
+            return None, None, None
+        print(f"No reliable auto court boundary found. Debug preview saved: {auto_preview_path}")
     elif auto_preview_path:
         cv2.imwrite(auto_preview_path, render_auto_court_preview(base_image, None, None, auto_debug))
         print(f"No reliable auto court boundary found. Debug preview saved: {auto_preview_path}")

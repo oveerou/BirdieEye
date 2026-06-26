@@ -67,7 +67,7 @@ class BadmintonAnalysisSystem:
                  ball_model_path='weights/yolo11s-ball.pt', template_path=None,
                  pose_mode='balanced', pose_family='rtmpose',
                  yolo_pose_model='yolo11n-pose.pt', show_pose_roi=True,
-                 frame_source=None):
+                 frame_source=None, non_interactive_annotation=False):
         self.video_path = video_path
         self.show_display = show_display
         self.language = language
@@ -78,6 +78,7 @@ class BadmintonAnalysisSystem:
         self.yolo_pose_model = yolo_pose_model
         self.show_pose_roi = show_pose_roi
         self.frame_source = frame_source
+        self.non_interactive_annotation = non_interactive_annotation
 
 
         self.show_skeletons = show_skeletons
@@ -459,7 +460,11 @@ class BadmintonAnalysisSystem:
                 roi_corners = compute_expanded_roi(corners, template_color.shape)
         else:
             auto_preview_path = os.path.join(self.save_dir, 'auto_court_preview.png')
-            corners, roi_corners, mid_height = annotate_court(template_color, auto_preview_path=auto_preview_path)
+            corners, roi_corners, mid_height = annotate_court(
+                template_color,
+                auto_preview_path=auto_preview_path,
+                non_interactive=self.non_interactive_annotation,
+            )
        
         if not corners or not roi_corners or len(corners) != 4 or len(roi_corners) != 2:
             raise RuntimeError("Court annotation is incomplete: click 4 court corners in order. ROI is generated automatically.")

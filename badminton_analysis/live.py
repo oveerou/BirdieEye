@@ -55,6 +55,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--browser-w", type=int, default=1280)
     p.add_argument("--browser-h", type=int, default=720)
     p.add_argument("--wait-sec", type=float, default=10.0)
+    p.add_argument("--interactive", action="store_true",
+                   help="Show OpenCV court annotation window (default: auto-accept non-interactively)")
     return p.parse_args()
 
 
@@ -103,6 +105,7 @@ def main() -> None:
         show_shuttlecock_trajectory=args.display_overlay == "true",
         show_player_stats=args.display_overlay == "true",
         frame_source=adapter,
+        non_interactive_annotation=not args.interactive,
     )
     system.keep_audio = False
 
