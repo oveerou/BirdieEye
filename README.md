@@ -260,6 +260,44 @@ badminton_analysis/
 
 本项目代码和 `weights/yolo11s-ball.pt` 使用 Apache License 2.0。随 Release 提供的 RTMPose / RTMO / YOLOX ONNX 权重来自 OpenMMLab / RTMPose 生态，按其上游 Apache License 2.0 授权使用，并保留原始归属。
 
+## 实时源 (Real-time sources)
+
+除了本地视频文件，也可以直接从屏幕区域或网页直播获取画面。两者都通过新入口 `python -m badminton_analysis.live` 启动，**不会改动**现有的 `python main.py --video-path xxx.mp4` 流程。
+
+新增的依赖：`mss`（屏幕捕获）、`websocket-client` + `requests`（无头浏览器）。已在 `requirements.txt` 中固定。
+
+### 屏幕捕获 (mss)
+
+抓取屏幕指定区域，可用于分析本地视频播放器窗口、训练软件等。
+
+```bat
+python -m badminton_analysis.live --source screen_capture --region 100,100,1280,720 --fps 30 --display true
+```
+
+参数 `--region left top width height` 指定抓取矩形，默认 `100 100 1280 720`。运行时会自动抓首帧作为球场标注源（自动检测或手动点 4 角点）。
+
+### 网页直播 (无头浏览器)
+
+用 headless Chrome 打开含 `<video>` 元素的网页，通过 Chrome DevTools Protocol 抓取 video 帧。**不依赖 selenium**，只用 `subprocess + websocket-client`。
+
+```bat
+python -m badminton_analysis.live --source browser_headless --url "https://example.com/live" --fps 30 --display true
+```
+
+前置：系统已安装 Google Chrome（默认路径 `C:\Program Files\Google\Chrome\Application\chrome.exe`，可通过 `--chrome-path` 覆盖）。其他参数：`--wait-sec 20` 增大等待时间、`--browser-w/--browser-h` 设置窗口大小。
+
+### 停止与输出
+
+按 `Ctrl+C` 即可优雅停止。结束后输出在 `outputs/live_<source>_<timestamp>/detect_*.mp4`（无音频；同 `keep_audio=false` 路径）。
+
+### 已知限制
+
+- 输出 mp4 的 fps 固定为 `--fps` 参数（默认 30），与实际源帧率不一致时播放速度会有偏差
+- 首帧是球场标注的来源，会出现在输出视频开头
+- Chrome 路径非默认时需用 `--chrome-path` 显式指定
+- macOS / Linux 屏幕捕获未经测试（mss 库支持但需自行验证）
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)

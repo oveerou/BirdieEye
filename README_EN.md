@@ -264,6 +264,42 @@ Thanks to [yastrebksv/TrackNet](https://github.com/yastrebksv/TrackNet) for orga
 
 Project code and `weights/yolo11s-ball.pt` are licensed under Apache License 2.0. RTMPose / RTMO / YOLOX ONNX weights provided in Releases come from the OpenMMLab / RTMPose ecosystem, are used under their upstream Apache License 2.0, and retain their original attribution.
 
+## Real-time sources
+
+In addition to local video files, the analysis can also run on a screen region or a webpage with a `<video>` element. Both use a new entry point `python -m badminton_analysis.live` and do **not** change the existing `python main.py --video-path xxx.mp4` workflow.
+
+New dependencies: `mss` (screen capture), `websocket-client` + `requests` (headless browser). Pinned in `requirements.txt`.
+
+### Screen capture (mss)
+
+```bat
+python -m badminton_analysis.live --source screen_capture --region 100,100,1280,720 --fps 30 --display true
+```
+
+`--region left top width height` selects the rectangle to grab (default `100 100 1280 720`). The first frame is auto-captured and used as the court template source (auto-detect or manual 4-corner click).
+
+### Web page live stream (headless browser)
+
+Uses headless Chrome with the Chrome DevTools Protocol to pull `<video>` frames. **No selenium dependency**; only `subprocess + websocket-client`.
+
+```bat
+python -m badminton_analysis.live --source browser_headless --url "https://example.com/live" --fps 30 --display true
+```
+
+Prerequisite: Google Chrome installed (default `C:\Program Files\Google\Chrome\Application\chrome.exe`; override with `--chrome-path`).
+
+### Stop and output
+
+`Ctrl+C` to stop gracefully. Output goes to `outputs/live_<source>_<timestamp>/detect_*.mp4` (no audio, same path as `keep_audio=false`).
+
+### Known limits
+
+- Output mp4 fps is fixed to `--fps` (default 30); mismatched source rate changes playback speed
+- The first frame is the court template source and appears at the head of the output video
+- Override `--chrome-path` when Chrome is not at the default location
+- macOS / Linux screen capture is untested (mss supports them but not verified here)
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)
