@@ -88,7 +88,7 @@ class BadmintonAnalysisSystem:
         self.show_performance_stats = show_performance_stats
         self.save_images = save_images  
 
-        if not os.path.exists(self.video_path):
+        if self.frame_source is None and not os.path.exists(self.video_path):
             raise FileNotFoundError(
                 f"Input video not found: {self.video_path}\n"
                 "Pass a valid video file with --video-path."
@@ -229,7 +229,10 @@ class BadmintonAnalysisSystem:
         print(f"\n处理完成:")
         print(f"原始视频时长: {video_duration:.2f} 秒")
         print(f"处理耗时: {processing_time:.2f} 秒")
-        print(f"处理速度比: {processing_time/video_duration:.2f}x")
+        if video_duration > 0:
+            print(f"处理速度比: {processing_time/video_duration:.2f}x")
+        else:
+            print(f"处理速度比: N/A (live source, duration unknown)")
         
         self._cleanup(cap)
 
