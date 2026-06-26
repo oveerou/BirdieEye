@@ -262,7 +262,7 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
             stop_event.set()
             adapter.release()
             try:
-                display_q.put_nowait(("__END__", -1))
+                display_q.put_nowait((None, -1))  # None is the END sentinel
             except Exception:
                 pass
 
@@ -278,7 +278,7 @@ def _run_inference_thread(system, adapter, run_id, save_dir):
             item = display_q.get(timeout=0.3)
         except queue.Empty:
             continue
-        if item[0] == "__END__":
+        if item[0] is None:  # END sentinel (frame items are np.ndarray, never None)
             break
         frame_bgr, _idx = item
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
