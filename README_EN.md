@@ -24,7 +24,7 @@
 
 ## 🆕 Changelog
 
-A derivative work based on the original badminton analysis tool, adding multi-source real-time input (screen capture/headless browser), Streamlit web console, court model auto-update & drift correction, real-time heatmap overlay, post-analysis (rally segmentation/KDE heatmaps/scatter plots), and GPU FP16/TF32 inference optimization.
+**2026-07-02**: Official open-source release.
 ---
 
 ## ✨ Features
