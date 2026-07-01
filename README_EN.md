@@ -25,29 +25,6 @@
 ## 🆕 Changelog
 
 A derivative work based on the original badminton analysis tool, adding multi-source real-time input (screen capture/headless browser), Streamlit web console, court model auto-update & drift correction, real-time heatmap overlay, post-analysis (rally segmentation/KDE heatmaps/scatter plots), and GPU FP16/TF32 inference optimization.
-
-## 🔮 Roadmap
-
-- [x] Frame-by-frame badminton match video analysis
-- [x] RTMPose / RTMO / YOLO Pose model support
-- [x] YOLO shuttlecock detection model integration
-- [x] Manual court annotation and court coordinate mapping
-- [x] Player movement trajectory, speed, distance, and rally statistics
-- [x] Chinese / English visualization text
-- [x] Heatmap, scatter plot, and detection data export
-- [x] Automatic court keypoint detection
-- [x] Multi-source real-time input (screen capture / headless browser / local video)
-- [x] Streamlit web console (one-click start.bat)
-- [x] Court model auto-update + drift correction
-- [x] Real-time heatmap overlay
-- [x] Post-analysis (rally segmentation, KDE heatmaps, scatter plots)
-- [x] GPU FP16 / TF32 inference optimization
-- [x] SQLite history and metrics storage
-- [ ] More stable hit-point recognition
-- [ ] More accurate shuttlecock detection model
-- [ ] More complete stroke statistics
-- [ ] Batch video analysis workflow
-
 ---
 
 ## ✨ Features
