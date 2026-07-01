@@ -50,7 +50,7 @@
 ## Requirements
 
 - Python 3.8+
-- Font: Chinese text rendering requires a bold font file (e.g., `simhei.ttf`). Download it from [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest) and place in the project root.
+- Font: Chinese text requires `simhei.ttf` from [Releases](https://github.com/oveerou/BirdieEye/releases). Falls back to English if missing.
 - FFmpeg available in system `PATH`
 - Shuttlecock YOLO detection weight, downloaded from [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest)
 

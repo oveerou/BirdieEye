@@ -50,7 +50,7 @@
 ## 📋 系统要求
 
 - Python 3.8+
-- 字体：中文显示需要黑体字体文件（如 `simhei.ttf`）。请手动从 [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest) 下载并放置到项目根目录。
+- 字体：中文显示需要黑体字体文件（`simhei.ttf`），从 [Releases](https://github.com/oveerou/BirdieEye/releases) 下载放入项目根目录。不下载则自动回退英文显示。
 
 - FFmpeg，并已加入系统 `PATH`
 - 羽毛球 YOLO 检测权重，请从 [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest)  下载
