@@ -4,8 +4,7 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/yo-WASSUP/BirdieEye?style=social)](https://github.com/yo-WASSUP/BirdieEye/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/yo-WASSUP/BirdieEye?style=social)](https://github.com/yo-WASSUP/BirdieEye/network/members)
-[![GitHub license](https://img.shields.io/github/license/yo-WASSUP/BirdieEye)](https://github.com/yo-WASSUP/BirdieEye/blob/main/LICENSE)
-[![RedNote](https://img.shields.io/badge/RedNote-ff2442)](https://www.xiaohongshu.com/explore/6a37b1d20000000011016229?xsec_token=ABod3wXBTiDppp6W2Ou0QHlu2eotUkeu27-ha64nFRR74=&xsec_source=pc_user)
+[![GitHub license](https://img.shields.io/github/license/oveerou/BirdieEye)](https://github.com/oveerou/BirdieEye/blob/main/LICENSE)
 
 **A computer-vision toolkit for badminton match video analysis**
 
