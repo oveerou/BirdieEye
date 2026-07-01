@@ -199,16 +199,15 @@ class BadmintonAnalysisSystem:
         self.debug = False
     def process_video(self, stop_event=None):
         """Process the input video."""
+        import datetime
+        import traceback as _tb
         if self.debug:
-            import datetime
-            import traceback as _tb
             _log_path = os.path.join(self.save_dir, "debug_process_video.log")
             log_file = open(_log_path, "a", encoding="utf-8")
             log_file.write(f"\n[{datetime.datetime.now()}] ===== process_video CALLED =====\n")
             log_file.flush()
         else:
             log_file = open(os.devnull, "w")
-            import traceback as _tb
 
         self.start_time = time.time()
 
