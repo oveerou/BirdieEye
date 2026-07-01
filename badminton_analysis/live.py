@@ -1,4 +1,4 @@
-"""Real-time source entry point for Good-Badminton.
+"""Real-time source entry point for BirdieEye.
 
 Usage:
     # Screen capture with a preset region
@@ -94,7 +94,7 @@ class _RegionAction(argparse.Action):
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Good-Badminton real-time source")
+    p = argparse.ArgumentParser(description="BirdieEye real-time source")
     p.add_argument("--source", required=True, choices=["screen_capture", "browser_headless"])
     p.add_argument("--fps", type=float, default=30.0, help="Output video fps (default 30)")
     p.add_argument("--display", choices=["true", "false"], default="true")

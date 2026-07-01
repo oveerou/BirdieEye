@@ -45,13 +45,16 @@ class ShuttlecockTracker:
 
         if torch is not None and hasattr(torch, "cuda") and torch.cuda.is_available():
             self.ultra_device = 0
+            self.use_half = True
         else:
             self.ultra_device = "cpu"
+            self.use_half = False
 
     def detect_ball(self, frame, conf=0.18, roi_corners=None):
         t0 = time.time()
         try:
-            ball_results = self.yolo_ball_model(frame, conf=conf, device=self.ultra_device, verbose=False)[0]
+            ball_results = self.yolo_ball_model(frame, conf=conf, device=self.ultra_device,
+                                                half=self.use_half, imgsz=416, verbose=False)[0]
         except TypeError:
             ball_results = self.yolo_ball_model(frame, conf=conf, verbose=False)[0]
 
@@ -69,6 +72,19 @@ class ShuttlecockTracker:
             "candidate_count": len(candidates),
         }
         return list(selected["point"]) if selected else [0, 0]
+
+    def _safe_append(self, point):
+        """Coerce to native int, reject NaN/overflow, append. Returns the clean tuple or None."""
+        try:
+            x = int(point[0])
+            y = int(point[1])
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if abs(x) > 100000 or abs(y) > 100000:
+            return None
+        clean = (x, y)
+        self.shuttlecock_trajectory.append(clean)
+        return clean
 
     def update_trajectory(self, ball_position, roi_corners=None):
         if ball_position == [0, 0] or ball_position is None:
@@ -177,7 +193,15 @@ class ShuttlecockTracker:
         return (last_x + (last_x - prev_x), last_y + (last_y - prev_y))
 
     def _append_valid_point(self, point):
-        self.shuttlecock_trajectory.append(point)
+        try:
+            x = int(point[0])
+            y = int(point[1])
+        except (TypeError, ValueError, OverflowError):
+            return
+        # Reject NaN (int(nan) raises, but guard anyway) and out-of-reasonable-range
+        if abs(x) > 100000 or abs(y) > 100000:
+            return
+        self.shuttlecock_trajectory.append((x, y))
         self.last_valid_position = point
         self.missing_frames = 0
 
@@ -209,16 +233,36 @@ class ShuttlecockTracker:
         t0 = time.time()
         color = (87, 108, 255)
         points = list(self.shuttlecock_trajectory)
+        fh, fw = frame.shape[:2]
 
-        for i, point in enumerate(points):
-            radius = int(3 + (i / len(points)) * 4)
-            cv2.circle(frame, point, radius, color, thickness=-1, lineType=cv2.LINE_AA)
+        # Pre-validate & coerce to native int — guards against np.int64 / NaN / overflow
+        clean_points = []
+        for p in points:
+            try:
+                x = int(p[0])
+                y = int(p[1])
+            except (TypeError, ValueError, OverflowError):
+                continue
+            # Reject NaN/infinity/coordinates wildly outside the frame
+            if not (0 <= x < fw and 0 <= y < fh):
+                continue
+            clean_points.append((x, y))
 
-        latest_point = points[-1]
+        if not clean_points:
+            return
+
+        for i, (x, y) in enumerate(clean_points):
+            radius = int(3 + (i / len(clean_points)) * 4)
+            cv2.circle(frame, (x, y), radius, color, thickness=-1, lineType=cv2.LINE_AA)
+
+        latest_point = clean_points[-1]
         cv2.circle(frame, latest_point, 6, (0, 165, 255), thickness=-1, lineType=cv2.LINE_AA)
 
         if self.show_performance_stats:
-            print(f"Drawing shuttlecock trajectory took {time.time() - t0:.2f} sec")
+            try:
+                print(f"Drawing shuttlecock trajectory took {time.time() - t0:.2f} sec")
+            except OSError:
+                pass
 
     def handle_visualization(self, frame):
         if self.show_trajectory and self.shuttlecock_trajectory:

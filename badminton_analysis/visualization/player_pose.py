@@ -64,15 +64,28 @@ class PlayerPoseVisualizer:
             if kp_arr.ndim != 2 or kp_arr.shape[0] < 17 or kp_arr.shape[1] < 2:
                 continue
 
-            lf = kp_arr[15]
-            rf = kp_arr[16]
-            if lf[0] <= 1 or lf[1] <= 1 or rf[0] <= 1 or rf[1] <= 1:
+            # 收集所有有效的下半身关键点（有一个算一个）
+            lower_indices = [15, 16, 13, 14, 11, 12]  # 脚踝, 膝盖, 髋部
+            candidates = []
+            for idx in lower_indices:
+                pt = kp_arr[idx]
+                if pt[0] > 1 and pt[1] > 1:
+                    candidates.append((float(pt[0]), float(pt[1])))
+
+            # 下半身全丢 → 用任意有效关键点
+            if not candidates:
+                for idx in range(17):
+                    pt = kp_arr[idx]
+                    if pt[0] > 1 and pt[1] > 1:
+                        candidates.append((float(pt[0]), float(pt[1])))
+
+            if not candidates:
                 continue
 
-            mid_point = (
-                (float(lf[0] + x1) + float(rf[0] + x1)) / 2,
-                (float(lf[1] + y1) + float(rf[1] + y1)) / 2 + 10,
-            )
+            foot_x = sum(p[0] for p in candidates) / len(candidates)
+            foot_y = max(p[1] for p in candidates) + 10
+
+            mid_point = (foot_x + x1, foot_y + y1)
             if not self._is_on_court(mid_point, active_court_mapper):
                 continue
 

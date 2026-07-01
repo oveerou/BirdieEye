@@ -1,3 +1,4 @@
+import ast
 import os
 import queue
 import tempfile
@@ -14,9 +15,18 @@ def load_runtime_dependencies():
     global PlayerPoseVisualizer, StatsVisualizer, RTMPoseProcessor, YOLOPoseProcessor, vap
     global JsonlDetectionWriter, write_json, SCHEMA_VERSION
 
-    yolo_config_dir = os.path.join(tempfile.gettempdir(), "good-badminton-ultralytics")
+    yolo_config_dir = os.path.join(tempfile.gettempdir(), "BirdieEye-ultralytics")
     os.makedirs(yolo_config_dir, exist_ok=True)
     os.environ.setdefault("YOLO_CONFIG_DIR", yolo_config_dir)
+
+    # GPU performance hints
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = True
+            torch.set_float32_matmul_precision("medium")  # use TF32 on Ampere+
+    except Exception:
+        pass
 
     try:
         import cv2 as _cv2
@@ -67,12 +77,12 @@ class BadmintonAnalysisSystem:
                  save_images=False, language='zh', output_dir=None,
                  ball_model_path='weights/yolo11s-ball.pt', template_path=None,
                  pose_mode='balanced', pose_family='rtmpose',
-                 yolo_pose_model='yolo11n-pose.pt', show_pose_roi=True,
+                 yolo_pose_model='yolo11n-pose.pt', show_pose_roi=False,
                  frame_source=None, non_interactive_annotation=False,
                  skip_court_annotation=False, device=None,
                  court_update_interval=8.0, court_update_min_quality=0.5,
-                 show_heatmap=True, heatmap_window=120.0,
-                 enable_court_updater=False):
+                 enable_court_updater=False, enable_drift_corrector=False,
+                 save_video=True):
         self.video_path = video_path
         self.show_display = show_display
         self.language = language
@@ -88,15 +98,16 @@ class BadmintonAnalysisSystem:
         self.device = device
         self.court_update_interval = float(court_update_interval)
         self.court_update_min_quality = float(court_update_min_quality)
-        self.show_heatmap = bool(show_heatmap)
-        self.heatmap_window = float(heatmap_window)
         self.enable_court_updater = bool(enable_court_updater)
+        self.enable_drift_corrector = bool(enable_drift_corrector)
+        self.save_video = bool(save_video)
         self.display_queue: "queue.Queue | None" = None
-        # Court/heatmap state, populated after _setup_court_annotation
+        # Court state, populated after _setup_court_annotation
         self.court_corners: list | None = None
         self.court_roi_corners: list | None = None
         self.mid_height: int | None = None
         self.court_mapper = None
+        self.drift_corrector = None
 
 
         self.show_skeletons = show_skeletons
@@ -127,15 +138,12 @@ class BadmintonAnalysisSystem:
             self.rtmpose_processor = RTMPoseProcessor(mode=self.pose_mode, pose_family=self.pose_family)
         self.yolo_ball_model = YOLO(self.ball_model_path)
 
-        # In-play court model updater + real-time heatmap (initialized in
+        # In-play court model updater (initialized in
         # process_video after _setup_court_annotation has set court_corners).
         self.court_updater = None
-        self.heatmap = None
 
         self.last_stats_update_frame = 0
 
-
-        self.video_path = video_path
         self.video_name = os.path.basename(self.video_path)[:-4]
         self.save_dir = output_dir or os.path.join('outputs', self.video_name)
         os.makedirs(self.save_dir, exist_ok=True)
@@ -157,7 +165,7 @@ class BadmintonAnalysisSystem:
 
         self.shuttlecock_tracker = ShuttlecockTracker(
             yolo_ball_model=self.yolo_ball_model,
-            trajectory_length=30,
+            trajectory_length=15,
             show_trajectory=self.show_shuttlecock_trajectory,
             show_performance_stats=False
         )
@@ -187,80 +195,187 @@ class BadmintonAnalysisSystem:
         self.frame_width = 0
         self.frame_height = 0
         self.performance_log_interval_frames = 150
-    def process_video(self):
+        self.total_frames = 0
+        self.debug = False
+    def process_video(self, stop_event=None):
         """Process the input video."""
+        if self.debug:
+            import datetime
+            import traceback as _tb
+            _log_path = os.path.join(self.save_dir, "debug_process_video.log")
+            log_file = open(_log_path, "a", encoding="utf-8")
+            log_file.write(f"\n[{datetime.datetime.now()}] ===== process_video CALLED =====\n")
+            log_file.flush()
+        else:
+            log_file = open(os.devnull, "w")
+            import traceback as _tb
+
         self.start_time = time.time()
 
         cap = self.frame_source if self.frame_source is not None else cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
+            log_file.write(f"[{datetime.datetime.now()}] EXIT: cannot open video source\n")
+            log_file.flush()
+            log_file.close()
             raise RuntimeError(f"Unable to open video: {self.video_path}")
 
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         if fps <= 0:
+            log_file.write(f"[{datetime.datetime.now()}] EXIT: fps<=0 ({fps})\n")
+            log_file.flush()
+            log_file.close()
             raise RuntimeError(f"Unable to read FPS from video: {self.video_path}")
         if total_frames > 0:
             video_duration = total_frames / fps
         else:
             video_duration = 0
-        
+        log_file.write(f"[{datetime.datetime.now()}] source opened: fps={fps}, total_frames={total_frames}, duration={video_duration:.2f}s\n")
+        log_file.flush()
 
         self.fps = fps
         self.performance_log_interval_frames = max(1, int(fps * 5))
         
 
-        template_path = self._get_template_path()
-        template_gray, template_color = self._load_template(template_path, cap)
-        
-
-        self.frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        out = self._setup_video_writer(self.frame_width, self.frame_height, fps)
-
-
-        corners, roi_corners, mid_height = self._setup_court_annotation(template_color)
-        self.court_corners = corners
-        self.court_roi_corners = roi_corners
-
-        self._write_metadata(fps, total_frames, video_duration, template_path, corners, roi_corners, mid_height)
-        self.detection_writer = JsonlDetectionWriter(self.detections_path)
-        
-
-        self.court_mapper = CourtMapper(corners)
-        self.player_pose_visualizer.court_mapper = self.court_mapper
-        self.player_tracker = PlayerTracker(corners=corners, threshold=mid_height, history_size=30,
-                                          detection_writer=self.detection_writer, fps=fps)
-        
-
-        self.stats_visualizer = StatsVisualizer(
-            frame_width=self.frame_width,
-            frame_height=self.frame_height,
-            language=self.language
-        )
-        
         frame_count = 0
         detect_frame_count = 0
+        out = None
+        corners = None
 
+        try:
+            template_path = self._get_template_path()
+            log_file.write(f"[{datetime.datetime.now()}] init: loading template {template_path}\n"); log_file.flush()
+            template_gray, template_color = self._load_template(template_path, cap)
+            log_file.write(f"[{datetime.datetime.now()}] init: template loaded OK\n"); log_file.flush()
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frame_count += 1
-            frame, detect_frame_count = self._process_frame(frame, template_gray, corners, roi_corners, frame_count, out, detect_frame_count)
+            self.frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if self.save_video:
+                out = self._setup_video_writer(self.frame_width, self.frame_height, fps)
+            else:
+                out = None
+                self.video_writer = None
+                try:
+                    print(f"[video] save_video=False, skipping MP4 output")
+                except OSError:
+                    pass
 
-        self.end_time = time.time()
-        processing_time = self.end_time - self.start_time
-        
-        print(f"\n处理完成:")
-        print(f"原始视频时长: {video_duration:.2f} 秒")
-        print(f"处理耗时: {processing_time:.2f} 秒")
-        if video_duration > 0:
-            print(f"处理速度比: {processing_time/video_duration:.2f}x")
-        else:
-            print(f"处理速度比: N/A (live source, duration unknown)")
-        
-        self._cleanup(cap)
+            log_file.write(f"[{datetime.datetime.now()}] init: setting up court annotation\n"); log_file.flush()
+            corners, roi_corners, mid_height = self._setup_court_annotation(template_color)
+            self.court_corners = corners
+            self.court_roi_corners = roi_corners
+            log_file.write(f"[{datetime.datetime.now()}] init: court annotation OK, corners={corners}\n"); log_file.flush()
+
+            self._write_metadata(fps, total_frames, video_duration, template_path, corners, roi_corners, mid_height)
+            self.detection_writer = JsonlDetectionWriter(self.detections_path)
+
+            self.court_mapper = CourtMapper(corners)
+            self.player_pose_visualizer.court_mapper = self.court_mapper
+            log_file.write(f"[{datetime.datetime.now()}] init: creating PlayerTracker\n"); log_file.flush()
+            self.player_tracker = PlayerTracker(corners=corners, threshold=mid_height, history_size=20,
+                                              detection_writer=self.detection_writer, fps=fps)
+
+            self.stats_visualizer = StatsVisualizer(
+                frame_width=self.frame_width,
+                frame_height=self.frame_height,
+                language=self.language
+            )
+            log_file.write(f"[{datetime.datetime.now()}] init: ALL INIT DONE, entering main loop\n"); log_file.flush()
+        except Exception as e:
+            log_file.write(f"[{datetime.datetime.now()}] EXIT: init Exception: {e}\n")
+            log_file.write(_tb.format_exc())
+            log_file.flush()
+            log_file.close()
+            raise
+
+        # For live sources, never exit due to read failures - only manual stop
+        # For video files, exit immediately on read failure (end of file)
+        is_live = self.frame_source is not None
+        max_consecutive_failures = 999999 if is_live else 1
+        consecutive_failures = 0
+
+        try:
+            while cap.isOpened():
+                # Check stop signal from UI
+                if stop_event is not None and stop_event.is_set():
+                    log_file.write(f"[{datetime.datetime.now()}] EXIT: stop_event is set at frame {frame_count}\n")
+                    log_file.flush()
+                    break
+                ret, frame = cap.read()
+                if not ret:
+                    consecutive_failures += 1
+                    if consecutive_failures >= max_consecutive_failures:
+                        log_file.write(f"[{datetime.datetime.now()}] EXIT: max_consecutive_failures reached ({max_consecutive_failures}) at frame {frame_count}\n")
+                        log_file.flush()
+                        break
+                    time.sleep(0.05)
+                    continue
+                consecutive_failures = 0
+                frame_count += 1
+                frame, detect_frame_count = self._process_frame(frame, template_gray, corners, roi_corners, frame_count, out, detect_frame_count)
+            else:
+                log_file.write(f"[{datetime.datetime.now()}] EXIT: cap.isOpened() returned False at frame {frame_count}\n")
+                log_file.flush()
+        except KeyboardInterrupt:
+            log_file.write(f"[{datetime.datetime.now()}] EXIT: KeyboardInterrupt at frame {frame_count}\n")
+            log_file.flush()
+        except Exception as e:
+            log_file.write(f"[{datetime.datetime.now()}] EXIT: Exception at frame {frame_count}: {e}\n")
+            log_file.write(_tb.format_exc())
+            log_file.flush()
+        finally:
+            self.total_frames = frame_count
+            self.end_time = time.time()
+            processing_time = self.end_time - self.start_time
+
+            try:
+                print(f"\n处理完成:")
+                print(f"原始视频时长: {video_duration:.2f} 秒")
+                print(f"处理耗时: {processing_time:.2f} 秒")
+                if video_duration > 0:
+                    print(f"处理速度比: {processing_time/video_duration:.2f}x")
+                else:
+                    print(f"处理速度比: N/A (live source, duration unknown)")
+            except OSError:
+                pass
+
+            log_file.write(f"[{datetime.datetime.now()}] FINALLY: total_frames={frame_count}, closing\n")
+            log_file.flush()
+            try:
+                log_file.close()
+            except Exception:
+                pass
+            self._cleanup(cap)
+
+    def get_summary(self) -> dict:
+        """Collect actual metrics after process_video() completes.
+
+        Returns a dict with the same keys that RunMetrics expects
+        (total_frames, avg_fps, avg_player_count, ball_visible_ratio,
+        upper_avg_speed, lower_avg_speed, total_rallies).
+        """
+        processing_time = 0.0
+        if self.start_time and self.end_time:
+            processing_time = self.end_time - self.start_time
+        avg_fps = round(self.total_frames / processing_time, 2) if processing_time > 0 else 0.0
+
+        upper_avg_speed = 0.0
+        lower_avg_speed = 0.0
+        stats = getattr(self, "cached_movement_stats", {}) or {}
+        if "upper" in stats and isinstance(stats["upper"], dict):
+            upper_avg_speed = float(stats["upper"].get("match_avg_speed", 0.0))
+        if "lower" in stats and isinstance(stats["lower"], dict):
+            lower_avg_speed = float(stats["lower"].get("match_avg_speed", 0.0))
+
+        return {
+            "total_frames": int(self.total_frames),
+            "avg_fps": float(avg_fps),
+            "avg_player_count": 0.0,
+            "ball_visible_ratio": 0.0,
+            "upper_avg_speed": float(upper_avg_speed),
+            "lower_avg_speed": float(lower_avg_speed),
+            "total_rallies": int(getattr(self, "rally_count", 0)),
+        }
 
     def _write_metadata(self, fps, total_frames, video_duration, template_path, corners, roi_corners, mid_height):
         metadata = {
@@ -295,6 +410,18 @@ class BadmintonAnalysisSystem:
         }
         write_json(self.metadata_path, metadata)
 
+    def _push_to_display_queue(self, frame, detect_frame_count):
+        if self.display_queue is None or frame is None:
+            return
+        try:
+            self.display_queue.put_nowait((frame, detect_frame_count))
+        except queue.Full:
+            try:
+                self.display_queue.get_nowait()
+                self.display_queue.put_nowait((frame, detect_frame_count))
+            except Exception:
+                pass
+
     def _process_frame(self, frame, template_gray, corners, roi_corners, frame_count, out, detect_frame_count):
 
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -303,91 +430,85 @@ class BadmintonAnalysisSystem:
 
         is_court = self.is_court_view(gray_frame, template_gray)
         
+        # ── Rally state machine (runs on every frame) ──
         if is_court:
             self.is_court_view_count += 1
             self.consecutive_non_court_frames = 0
         else:
             self.consecutive_non_court_frames += 1
             self.is_court_view_count = 0
-            
 
         if self.is_court_view_count >= self.court_view_frames_threshold and not self.rally_active:
             self.rally_active = True
-
             self.rally_count += 1
-
             self.player_tracker.start_new_rally()
-            
 
         if self.consecutive_non_court_frames >= self.non_court_frames_threshold and self.rally_active:
             self.rally_active = False
-
             self.shuttlecock_tracker.clear_trajectory()
 
-
+        # ── Early return for non-court frames: skip all detection/tracking ──
         if not is_court:
+            fh, fw = frame.shape[:2]
+            if self.show_player_stats and self.cached_movement_stats:
+                cv2.putText(frame, "STATS PAUSED", (20, fh - 50),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1, cv2.LINE_AA)
+            self._push_to_display_queue(frame, detect_frame_count)
             return frame, detect_frame_count
 
         detect_frame_count += 1
 
-        x1, y1 = roi_corners[0]
-        x2, y2 = roi_corners[1]
+        # Use the latest roi_corners (may have been updated by CourtModelUpdater)
+        current_roi = self.court_roi_corners if self.court_roi_corners else roi_corners
+        x1, y1 = current_roi[0]
+        x2, y2 = current_roi[1]
         roi = frame[y1:y2, x1:x2]
+        if roi.size == 0:
+            # ROI is invalid (e.g., court updater produced bad corners), fall back to full frame
+            roi = frame
+            x1, y1 = 0, 0
+
         if self.show_pose_roi:
-            cv2.rectangle(frame, roi_corners[0], roi_corners[1], (255, 0, 0), 2)
+            cv2.rectangle(frame, current_roi[0], current_roi[1], (255, 0, 0), 2)
             cv2.putText(frame, "Pose ROI", (x1, max(24, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2, cv2.LINE_AA)
 
-
+        # ── Detection (only runs on court frames — non-court frames returned early above) ──
         pose_t0 = time.time()
         centroids, point_left_hands, point_right_hands = self.player_pose_visualizer.detect_players(roi, x1, y1)
         pose_elapsed = time.time() - pose_t0
 
+        # ── Drift correction: periodic check + apply ──
+        if hasattr(self, 'drift_corrector') and self.drift_corrector is not None:
+            self.drift_corrector.maybe_check(frame)
+            if centroids and self.drift_corrector.is_active:
+                centroids = self.drift_corrector.correct(centroids)
+
         ball_t0 = time.time()
-        detected_ball_position = self.shuttlecock_tracker.detect_ball(frame, roi_corners=roi_corners)
+        detected_ball_position = self.shuttlecock_tracker.detect_ball(frame, roi_corners=current_roi)
         ball_elapsed = time.time() - ball_t0
-        ball_position = self.shuttlecock_tracker.update_trajectory(detected_ball_position, roi_corners)
-        
+        ball_position = self.shuttlecock_tracker.update_trajectory(detected_ball_position, current_roi)
 
         shuttle_draw_t0 = time.time()
         self.shuttlecock_tracker.handle_visualization(frame)
         shuttle_draw_elapsed = time.time() - shuttle_draw_t0
-        
 
+        # ── Tracking ──
         players = self.player_tracker.update(frame_count, centroids, ball_position,
                                              point_left_hands, point_right_hands, detect_frame_count)
 
-
-        # In-play court model refresh + sliding-window heatmap.
-        if is_court and self.court_updater is not None:
+        # ── CourtModelUpdater ──
+        if self.court_updater is not None:
             try:
-                self.court_updater.maybe_update(frame, len(players))
-            except Exception:
-                pass
-            now = time.time()
-            for half in ("upper", "lower"):
-                history = self.player_tracker.court_history.get(half)
-                if not history:
-                    continue
-                latest = history[-1]
-                if latest is None:
-                    continue
-                try:
-                    self.heatmap.add(latest[0], latest[1], half, t=now)
-                except Exception:
-                    pass
-        if self.show_heatmap and self.heatmap is not None and frame is not None \
-                and (self.heatmap.upper_events or self.heatmap.lower_events):
-            try:
-                self.heatmap.overlay_on(frame)
+                self.court_updater.maybe_update(frame, len(centroids))
             except Exception:
                 pass
 
+        # ── Stats ──
         if frame_count == 1 or not self.cached_movement_stats:
             self.cached_movement_stats = self.player_tracker.get_player_movement_stats()
             self.stats_update_interval_frames = int(self.player_tracker.fps * 0.5)
 
         if frame_count - self.last_stats_update_frame >= self.stats_update_interval_frames:
-
             self.cached_movement_stats = self.player_tracker.get_player_movement_stats()
             self.last_stats_update_frame = frame_count
 
@@ -400,13 +521,15 @@ class BadmintonAnalysisSystem:
 
         t0 = time.time()
 
+        active_stats_viz = self.stats_visualizer if self.show_player_stats else None
         self.player_pose_visualizer.draw_players(
-            frame=frame, 
-            player_tracker=self.player_tracker, 
+            frame=frame,
+            player_tracker=self.player_tracker,
             cached_movement_stats=self.cached_movement_stats,
-            stats_visualizer=self.stats_visualizer if self.show_player_stats else None,
+            stats_visualizer=active_stats_viz,
             rally_count=self.rally_count
         )
+
         t1 = time.time()
         players_draw_elapsed = t1 - t0
         
@@ -434,20 +557,12 @@ class BadmintonAnalysisSystem:
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q') or cv2.getWindowProperty('frame', cv2.WND_PROP_VISIBLE) < 1:
                     raise KeyboardInterrupt
-            out.write(frame)
+            if out is not None:
+                out.write(frame)
 
             if self.save_images:
                 cv2.imwrite(os.path.join(self.images_save_dir, f"{frame_count}.png"), frame)
-        # Push to web UI queue if attached.
-        if self.display_queue is not None and frame is not None:
-            try:
-                self.display_queue.put_nowait((frame, detect_frame_count))
-            except queue.Full:
-                try:
-                    self.display_queue.get_nowait()
-                    self.display_queue.put_nowait((frame, detect_frame_count))
-                except Exception:
-                    pass
+        self._push_to_display_queue(frame, detect_frame_count)
         return frame, detect_frame_count
 
     def process_frame(self, frame, template_gray, corners, roi_corners, frame_count, out, detect_frame_count):
@@ -527,9 +642,9 @@ class BadmintonAnalysisSystem:
 
         if os.path.exists(os.path.join(self.save_dir, 'court_annotations.txt')):
             with open(os.path.join(self.save_dir, 'court_annotations.txt'), 'r') as f:
-                corners = eval(f.readline().split('=')[1])
+                corners = ast.literal_eval(f.readline().split('=', 1)[1])
                 f.readline()
-                mid_height = eval(f.readline().split('=')[1])
+                mid_height = ast.literal_eval(f.readline().split('=', 1)[1])
                 roi_corners = compute_expanded_roi(corners, template_color.shape)
         else:
             auto_preview_path = os.path.join(self.save_dir, 'auto_court_preview.png')
@@ -550,9 +665,9 @@ class BadmintonAnalysisSystem:
         self.court_corners = list(corners)
         self.court_roi_corners = list(roi_corners)
         self.mid_height = int(mid_height)
-        # Initialize the in-play updater + heatmap now that we have a model.
+        # Initialize the in-play updater now that we have a model.
         from .court.updater import CourtModelUpdater
-        from .analytics.heatmap import CourtHeatmap
+        from .court.drift_corrector import CourtDriftCorrector
         if self.enable_court_updater:
             self.court_updater = CourtModelUpdater(
                 self,
@@ -561,10 +676,15 @@ class BadmintonAnalysisSystem:
             )
         else:
             self.court_updater = None
-        self.heatmap = CourtHeatmap()
-        # Allow per-run override of heatmap window without mutating the class.
-        if self.heatmap_window != CourtHeatmap.WINDOW_SEC:
-            self.heatmap.WINDOW_SEC = self.heatmap_window
+
+        # Drift corrector: periodically re-detect court corners and compensate
+        # for camera movement.  Disabled by default — auto_detect_court_corners
+        # is unreliable on broadcast footage (HSV finds green patches, not court
+        # lines), which produces wrong homographies that shift centroids off-target.
+        if self.enable_drift_corrector:
+            self.drift_corrector = CourtDriftCorrector(corners, check_interval=90)
+        else:
+            self.drift_corrector = None
         return corners, roi_corners, mid_height
 
     def _cleanup(self, cap):
@@ -573,14 +693,18 @@ class BadmintonAnalysisSystem:
             self.detection_writer.close()
             self.detection_writer = None
 
-        if hasattr(self, 'video_writer') and self.video_writer is not None:
-            self.video_writer.release()
-            time.sleep(1)
+        if self.save_video:
+            if hasattr(self, 'video_writer') and self.video_writer is not None:
+                self.video_writer.release()
+                time.sleep(1)
 
         cap.release()
 
         if self.show_display:
             cv2.destroyAllWindows()
+
+        if not self.save_video:
+            return
 
         if hasattr(self, 'keep_audio') and self.keep_audio:
             vap.process_video_with_audio(
@@ -595,17 +719,34 @@ class BadmintonAnalysisSystem:
                 output_path=self.output_video_path
             )
 
-    def analyze_shuttlecock(self, roi_corners, corners):
-        """Hit-point analysis is currently disabled."""
-        raise RuntimeError(
-            "Hit-point analysis is disabled until it is migrated to detections.jsonl."
-        )
+    def is_court_view(self, frame, template_gray, threshold=0.70):
+        """Return whether the frame matches the court template.
 
-    def is_court_view(self, frame, template_gray, threshold=0.75):
-        """Return whether the frame matches the court template."""
+        Threshold 0.55 balances precision and recall for real-time screen-capture
+        sources. The original offline pipeline uses 0.75, but captured frames may
+        have resolution/compression differences that lower the raw score slightly.
+        Values below ~0.50 admit too many non-court frames (close-ups, replays)
+        which feed garbage positions into the tracker and heatmap.
+        """
+        # Cache the result for a few frames to reduce CPU overhead.
+        # Template matching is expensive and court view status changes slowly.
+        cache_count = getattr(self, '_is_court_cache_count', 0)
+        if cache_count > 0 and hasattr(self, '_is_court_cache_result'):
+            self._is_court_cache_count = cache_count - 1
+            return self._is_court_cache_result
+
         result = cv2.matchTemplate(frame, template_gray, cv2.TM_CCOEFF_NORMED)
-        # print("match score: ", result)
-        return np.max(result) >= threshold
+        score = float(np.max(result))
+        is_court = score >= threshold
+        if not getattr(self, '_is_court_debug_printed', False):
+            try:
+                print(f"[court] is_court_view: first match score = {score:.4f} (threshold={threshold})")
+            except OSError:
+                pass
+            self._is_court_debug_printed = True
+        self._is_court_cache_result = is_court
+        self._is_court_cache_count = 5  # reuse for next 5 frames
+        return is_court
 
     def draw_court_roi(self, frame, corners, roi_corners):
         self.court_mapper = CourtMapper(corners)

@@ -1,6 +1,8 @@
 """Wraps a FrameSource to look like cv2.VideoCapture for BadmintonAnalysisSystem."""
 from __future__ import annotations
 
+import time
+
 import cv2
 import numpy as np
 
@@ -40,10 +42,16 @@ class StreamAdapter:
             frame = self._first_frame
             self._first_frame = None
             return True, frame
-        res = self._source.next_frame()
-        if not res.ok:
-            return False, None
-        return True, res.frame
+        # Retry up to 3 times to survive transient capture failures
+        # (e.g., screen capture hiccup, window occlusion during angle switch)
+        max_retries = 3
+        for attempt in range(max_retries):
+            res = self._source.next_frame()
+            if res.ok:
+                return True, res.frame
+            # Brief pause before retry to let the source recover
+            time.sleep(0.05)
+        return False, None
 
     def get(self, prop: int) -> float:
         if prop == cv2.CAP_PROP_FPS:

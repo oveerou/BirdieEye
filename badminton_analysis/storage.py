@@ -58,7 +58,7 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     """Open (or create) the SQLite DB and return a connection."""
     if db_path is None:
         from .config import OUTPUTS_DIR
-        db_path = OUTPUTS_DIR / "football.db"
+        db_path = OUTPUTS_DIR / "badminton.db"
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))

@@ -480,8 +480,8 @@ def render_auto_court_preview(image, corners, roi_corners=None, debug=None):
         points = np.array(corners, dtype=np.int32)
         cv2.polylines(preview, [points], True, (0, 255, 0), 3)
         for idx, point in enumerate(corners, start=1):
-            cv2.circle(preview, point, 6, (0, 0, 255), -1)
-            cv2.putText(preview, str(idx), (point[0] + 8, point[1] - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.circle(preview, (int(point[0]), int(point[1])), 6, (0, 0, 255), -1)
+            cv2.putText(preview, str(idx), (int(point[0]) + 8, int(point[1]) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2, cv2.LINE_AA)
 
     if roi_corners:
         cv2.rectangle(preview, roi_corners[0], roi_corners[1], (255, 0, 0), 3)

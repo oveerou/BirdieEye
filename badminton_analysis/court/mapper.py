@@ -203,8 +203,8 @@ def annotate_court(image, auto_preview_path=None, non_interactive=False):
         view = base_image.copy()
         draw_guidance(view, extra_line)
         for idx, point in enumerate(corners, start=1):
-            cv2.circle(view, point, 5, (0, 0, 255), -1)
-            cv2.putText(view, str(idx), (point[0] + 8, point[1] - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.circle(view, (int(point[0]), int(point[1])), 5, (0, 0, 255), -1)
+            cv2.putText(view, str(idx), (int(point[0]) + 8, int(point[1]) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2, cv2.LINE_AA)
         if len(corners) > 1:
             cv2.polylines(view, [np.array(corners, dtype=np.int32)], False, (0, 255, 255), 2)
         return view

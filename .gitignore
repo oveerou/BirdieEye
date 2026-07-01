@@ -14,7 +14,10 @@ env/
 # Local inputs and generated outputs
 results/
 outputs/
+videos/
 *.log
+*.png
+simhei.ttf
 
 # Model weights are intentionally not published
 weights/*

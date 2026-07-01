@@ -1,10 +1,10 @@
-﻿# Good-Badminton: AI 羽毛球鹰眼系统 🏸
+# BirdieEye: AI 羽毛球鹰眼系统 🏸
 
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/yo-WASSUP/Good-Badminton?style=social)](https://github.com/yo-WASSUP/Good-Badminton/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/yo-WASSUP/Good-Badminton?style=social)](https://github.com/yo-WASSUP/Good-Badminton/network/members)
-[![GitHub license](https://img.shields.io/github/license/yo-WASSUP/Good-Badminton)](https://github.com/yo-WASSUP/Good-Badminton/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/yo-WASSUP/BirdieEye?style=social)](https://github.com/yo-WASSUP/BirdieEye/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/yo-WASSUP/BirdieEye?style=social)](https://github.com/yo-WASSUP/BirdieEye/network/members)
+[![GitHub license](https://img.shields.io/github/license/yo-WASSUP/BirdieEye)](https://github.com/yo-WASSUP/BirdieEye/blob/main/LICENSE)
 [![小红书视频介绍](https://img.shields.io/badge/小红书-视频介绍-ff2442)](https://www.xiaohongshu.com/explore/6a37b1d20000000011016229?xsec_token=ABod3wXBTiDppp6W2Ou0QHlu2eotUkeu27-ha64nFRR74=&xsec_source=pc_user)
 
 **基于计算机视觉的羽毛球比赛视频分析工具**
@@ -15,11 +15,11 @@
 
 ## 🎬 效果预览
 
-![Good-Badminton 分析结果预览](assets/demo.gif)
-
-视频效果在 `assets/demo.mp4`。
+> 由于 GitHub 仓库精简，预览 GIF 和截图未包含在源码中。可查看 [原项目](https://github.com/yo-WASSUP/Good-Badminton) 或在本地运行后自行截取。
 
 ## 🆕 更新日志
+- **2026-06-29**：新增后期分析模块（回合切片、KDE 热力图、散点图、移动统计）；球场漂移矫正；GPU FP16/TF32 推理优化；Web UI 交互改进（错误堆栈展示、球场检测重试、启动提醒）。
+- **2026-06-27**：新增多源实时输入（屏幕捕获 / 无头浏览器）；Streamlit Web 控制台；球场模型自动更新 + 实时热力图；SQLite 历史记录。
 - **2026-06-23**：增加自动球场边界检测。
 - **2026-06-20**：正式开源。
 - **2026-06-17**：整理项目介绍文档。
@@ -35,10 +35,17 @@
 - [x] 球员移动轨迹、速度、距离和回合统计
 - [x] 中文 / 英文可视化文字
 - [x] 热力图、散点图和检测数据导出
+- [x] 自动球场关键点检测
+- [x] 多源实时输入（屏幕捕获 / 无头浏览器 / 本地视频）
+- [x] Streamlit Web 控制台（一键启动 start.bat）
+- [x] 球场模型自动更新 + 漂移矫正
+- [x] 实时热力图叠加
+- [x] 后期分析（回合切片、KDE 热力图、散点图）
+- [x] GPU FP16 / TF32 推理优化
+- [x] SQLite 历史记录与指标存储
 - [ ] 更稳定的击球点识别
 - [ ] 更精确的羽毛球检测模型
 - [ ] 更完整的技术动作统计
-- [x] 自动球场关键点检测
 - [ ] 批量视频分析工作流
 
 ---
@@ -55,12 +62,21 @@
 - **位置图表** - 自动生成球员位置热力图和散点图。
 - **中英文显示** - 可通过 `--language zh/en` 切换可视化文字。
 - **本地运行** - 视频、模型和分析结果都保存在本地。
+- **多源实时输入** - 支持本地视频、屏幕捕获（mss）和无头浏览器（Chrome DevTools Protocol）三种输入源，可分析直播画面。
+- **球场漂移矫正** - 通过单应性矩阵定期重新检测球场角点，修正长时间运行中的摄像头漂移，保持坐标映射精度。
+- **实时热力图** - 2 分钟滑动窗口热力图，上下半场分图，实时叠加在视频右下角小地图中。
+- **后期分析** - 自动回合切片、KDE 热力图、散点图和每回合移动统计，生成高质量分析图表。
+- **GPU 推理优化** - FP16 半精度推理 + TF32 矩阵乘法 + cuDNN benchmark，显著提升 GPU 帧率。
+- **Web 控制台** - Streamlit 界面，支持实时帧显示、参数调节、球场标注、历史记录查看，一键 `start.bat` 启动。
+- **SQLite 历史** - 每次运行自动记录指标到 SQLite 数据库，支持历史回溯和对比分析。
 
 ## 📋 系统要求
 
 - Python 3.8+
+- 字体：中文显示需要黑体字体文件（如 `simhei.ttf`）。请手动从 [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest) 下载并放置到项目根目录。
+
 - FFmpeg，并已加入系统 `PATH`
-- 羽毛球 YOLO 检测权重，请从 [GitHub Releases](https://github.com/yo-WASSUP/Good-Badminton/releases/latest)  下载
+- 羽毛球 YOLO 检测权重，请从 [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest)  下载
 
 ## 性能需求与参考速度
 
@@ -157,8 +173,6 @@ python main.py --video-path videos/demo.mp4
 4. 程序会先尝试自动检测球场边界，并保存 `outputs/<视频文件名>/auto_court_preview.png`。预览窗口按 Enter/Y 接受自动结果；按 M/R/Esc 进入手动四角标注。
 5. 如果进入手动标注，按图片顶部提示依次点击球场四个角点：左上、右上、右下、左下。
 
-![球场标注示例](assets/label_court_example.png)
-
 6. 点完四个点后，窗口会显示绿色球场框和蓝色姿态检测 ROI 框。ROI 由程序根据球场自动生成。
 7. 标注结果会保存到 `outputs/<视频文件名>/court_annotations.txt`。同一个输出目录下再次运行会复用这个文件，不会重复要求标注。
 8. 分析结束后，查看 `outputs/<视频文件名>/detect_<视频文件名>.mp4`、`detections.jsonl` 和 `position_visualizations/`。
@@ -228,24 +242,23 @@ RTMPose 模型档位：
 - `position_visualizations/heatmaps/`：球员位置热力图。
 - `position_visualizations/scatter_plots/`：球员位置散点图。
 
-### 位置可视化示例
-
-| 热力图 | 散点图 |
-| --- | --- |
-| ![球员位置热力图示例](assets/match_heatmap.png) | ![球员位置散点图示例](assets/match_scatter.png) |
-
 ## 🧩 项目结构
 
 ```text
-main.py              # 命令行入口和参数解析，保持 python main.py ... 的运行方式
+main.py              # 命令行入口（本地视频分析）
+app.py               # Streamlit Web 控制台入口
+start.bat            # 一键启动脚本（自动建 venv + 装依赖 + 起 Streamlit）
 badminton_analysis/
 ├── system.py        # 视频分析主流程 BadmintonAnalysisSystem
-├── court/           # 球场标注与坐标映射
-├── data/            # JSON / JSONL 输出
+├── config.py        # YAML 配置加载与 AppConfig
+├── storage.py       # SQLite 历史 + metrics.json 写入
+├── analytics/       # 实时热力图 + 后期分析（回合切片、KDE、散点图）
+├── sources/         # 多源输入（屏幕捕获 / 无头浏览器 / 视频文件 / 流适配器）
+├── court/           # 球场检测、坐标映射、漂移矫正、自动更新
 ├── detection/       # 羽毛球检测与姿态检测
-├── media/           # 视频音频处理
 ├── tracking/        # 球员追踪
-└── visualization/   # 视频叠加层、统计图和位置图
+├── visualization/   # 视频叠加层、统计图和位置图
+└── media/           # 视频音频处理
 ```
 
 ## 🙏 致谢
@@ -329,7 +342,7 @@ start.bat
 - 当前回合号
 - 上半场 + 下半场球员数 / 平均速度 / 累计移动距离
 
-跑完写入 SQLite `outputs/football.db`，底部表格可看历史。
+跑完写入 SQLite `outputs/badminton.db`，底部表格可看历史。
 
 ### 球场检测选项
 
@@ -341,7 +354,7 @@ start.bat
 | 目录 | 内容 |
 |---|---|
 | `outputs/runs/run_<时间戳>_<id>/` | 每轮次的 `metrics.json` + 标注视频 |
-| `outputs/football.db` | SQLite 历史 |
+| `outputs/badminton.db` | SQLite 历史 |
 | `outputs/uploads/` | Web 上传的本地视频 |
 
 ### 已知限制
@@ -383,6 +396,34 @@ Streamlit 侧栏"高级"折叠区可调。
 > 注：`main.py`（本地文件分析）默认 `enable_court_updater=False`，保持与原版 byte-level 一致；球场自动更新只在 `live.py` / Streamlit 实时源里启用。
 
 
+## 后期分析
+
+识别停止或视频处理完成后，自动对 `detections.jsonl` 进行后期分析：
+
+- **回合切片**：根据回合编号将检测数据切分为独立回合
+- **KDE 热力图**：为每个回合和全场生成核密度估计热力图
+- **散点图**：球员位置散点图，按上下半场分色
+- **移动统计**：每回合移动距离、平均速度、最大速度
+
+结果保存在 `outputs/runs/run_<时间戳>_<id>/post_analysis/` 目录下。
+
+
+## 与原版的差异
+
+本项目基于原版羽毛球分析工具二次开发，主要改进如下：
+
+| 方面 | 原版 | 本项目 |
+|------|------|--------|
+| 输入源 | 仅本地视频文件 | 本地视频 + 屏幕捕获 + 无头浏览器 |
+| Web UI | Gradio（离线上传） | Streamlit（实时帧显示 + 交互标注） |
+| 球场模型 | 启动时一次性检测 | 自动定期更新 + 漂移矫正 |
+| 热力图 | 仅后期生成 | 实时叠加 + 后期 KDE 高质量图 |
+| 后期分析 | 无 | 回合切片、KDE 热力图、散点图、移动统计 |
+| GPU 优化 | CPU 默认 | FP16 + TF32 + cuDNN benchmark |
+| 数据存储 | JSONL + 视频 | JSONL + 视频 + SQLite 历史 + metrics.json |
+| 球场模型文件 | reference.py 独立文件 | 常量内联到 detector.py，减少模块依赖 |
+
+
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/BirdieEye&type=Date)](https://www.star-history.com/#yo-WASSUP/BirdieEye&Date)

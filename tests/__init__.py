@@ -1,1 +1,1 @@
-"""Tests for Good-Badminton."""
+"""Tests for BirdieEye."""

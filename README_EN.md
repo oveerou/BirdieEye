@@ -1,10 +1,10 @@
-﻿# Good-Badminton: AI Badminton Hawk-Eye System 🏸
+# BirdieEye: AI Badminton Hawk-Eye System 🏸
 
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/yo-WASSUP/Good-Badminton?style=social)](https://github.com/yo-WASSUP/Good-Badminton/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/yo-WASSUP/Good-Badminton?style=social)](https://github.com/yo-WASSUP/Good-Badminton/network/members)
-[![GitHub license](https://img.shields.io/github/license/yo-WASSUP/Good-Badminton)](https://github.com/yo-WASSUP/Good-Badminton/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/yo-WASSUP/BirdieEye?style=social)](https://github.com/yo-WASSUP/BirdieEye/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/yo-WASSUP/BirdieEye?style=social)](https://github.com/yo-WASSUP/BirdieEye/network/members)
+[![GitHub license](https://img.shields.io/github/license/yo-WASSUP/BirdieEye)](https://github.com/yo-WASSUP/BirdieEye/blob/main/LICENSE)
 [![RedNote](https://img.shields.io/badge/RedNote-ff2442)](https://www.xiaohongshu.com/explore/6a37b1d20000000011016229?xsec_token=ABod3wXBTiDppp6W2Ou0QHlu2eotUkeu27-ha64nFRR74=&xsec_source=pc_user)
 
 **A computer-vision toolkit for badminton match video analysis**
@@ -15,12 +15,12 @@
 
 ## 🎬 Preview
 
-![Good-Badminton analysis preview](assets/demo_en.gif)
-
-Video preview: `assets/demo_en.mp4`.
+> Preview GIF and screenshots are not included in the source repo. See the [original project](https://github.com/yo-WASSUP/Good-Badminton) or run locally to capture your own.
 
 ## 🆕 Changelog
 
+- **2026-06-29**: Added post-analysis module (rally segmentation, KDE heatmaps, scatter plots, movement statistics); court drift correction; GPU FP16/TF32 inference optimization; Web UI interaction improvements (error traceback display, court detection retry, startup reminder).
+- **2026-06-27**: Added multi-source real-time input (screen capture / headless browser); Streamlit web console; court model auto-update + real-time heatmap; SQLite history tracking.
 - **2026-06-23**: Added automatic court boundary detection.
 - **2026-06-20**: Initial open-source release.
 - **2026-06-17**: Project documentation cleanup.
@@ -36,10 +36,17 @@ Video preview: `assets/demo_en.mp4`.
 - [x] Player movement trajectory, speed, distance, and rally statistics
 - [x] Chinese / English visualization text
 - [x] Heatmap, scatter plot, and detection data export
+- [x] Automatic court keypoint detection
+- [x] Multi-source real-time input (screen capture / headless browser / local video)
+- [x] Streamlit web console (one-click start.bat)
+- [x] Court model auto-update + drift correction
+- [x] Real-time heatmap overlay
+- [x] Post-analysis (rally segmentation, KDE heatmaps, scatter plots)
+- [x] GPU FP16 / TF32 inference optimization
+- [x] SQLite history and metrics storage
 - [ ] More stable hit-point recognition
 - [ ] More accurate shuttlecock detection model
 - [ ] More complete stroke statistics
-- [x] Automatic court keypoint detection
 - [ ] Batch video analysis workflow
 
 ---
@@ -56,12 +63,20 @@ Video preview: `assets/demo_en.mp4`.
 - **Position charts** - Automatically generates player position heatmaps and scatter plots.
 - **Chinese / English display** - Switch visualization text with `--language zh/en`.
 - **Local execution** - Videos, models, and analysis outputs stay on your local machine.
+- **Multi-source real-time input** - Supports local video, screen capture (mss), and headless browser (Chrome DevTools Protocol) for analyzing live feeds.
+- **Court drift correction** - Periodically re-detects court corners via homography to correct camera drift during long sessions, maintaining coordinate mapping accuracy.
+- **Real-time heatmap** - 2-minute sliding-window heatmap with separate upper/lower court halves, overlaid as a minimap in the bottom-right corner.
+- **Post-analysis** - Automatic rally segmentation, KDE heatmaps, scatter plots, and per-rally movement statistics for publication-quality analysis.
+- **GPU inference optimization** - FP16 half-precision inference + TF32 matrix multiplication + cuDNN benchmark for significantly improved GPU frame rates.
+- **Web console** - Streamlit interface with real-time frame display, parameter tuning, court annotation, history browsing, and one-click `start.bat` launch.
+- **SQLite history** - Each run automatically records metrics to a SQLite database for historical review and comparison.
 
 ## Requirements
 
 - Python 3.8+
+- Font: Chinese text rendering requires a bold font file (e.g., `simhei.ttf`). Download it from [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest) and place in the project root.
 - FFmpeg available in system `PATH`
-- Shuttlecock YOLO detection weight, downloaded from [GitHub Releases](https://github.com/yo-WASSUP/Good-Badminton/releases/latest)
+- Shuttlecock YOLO detection weight, downloaded from [GitHub Releases](https://github.com/yo-WASSUP/BirdieEye/releases/latest)
 
 ## Performance Requirements and Reference Speed
 
@@ -158,9 +173,7 @@ python main.py --video-path videos/demo.mp4
 
 3. If `--template-path` is not provided, the program opens a file picker for a court template image. Usually, choose a stable frame with clear court lines.
 4. The program first tries to detect the court boundary automatically and saves `outputs/<video_name>/auto_court_preview.png`. Press Enter/Y in the preview window to accept it, or press M/R/Esc to switch to manual four-corner annotation.
-5. If manual annotation is used, follow the prompt at the top of the image and click the four court corners in order: top-left, top-right, bottom-right, bottom-left.
-
-![Court annotation example](assets/label_court_example.png)
+5. If manual annotation is used, follow the prompt at the top of the image and click the four court corners in order.
 
 6. After the four points are selected, the window shows a green court box and a blue pose-detection ROI. The ROI is generated automatically from the court area.
 7. The annotation is saved to `outputs/<video_name>/court_annotations.txt`. Re-running with the same output directory reuses this file.
@@ -232,24 +245,23 @@ Default output directory: `outputs/<video_name>/`.
 - `position_visualizations/heatmaps/`: player position heatmaps.
 - `position_visualizations/scatter_plots/`: player position scatter plots.
 
-### Position Visualization Examples
-
-| Heatmap | Scatter Plot |
-| --- | --- |
-| ![Player position heatmap example](assets/match_heatmap_en.png) | ![Player position scatter plot example](assets/match_scatter_en.png) |
-
 ## 🧩 Project Structure
 
 ```text
-main.py              # CLI entry and argument parsing; keeps python main.py ... usage
+main.py              # CLI entry for local video analysis
+app.py               # Streamlit web console entry
+start.bat            # One-click launcher (creates venv + installs deps + starts Streamlit)
 badminton_analysis/
 ├── system.py        # Main video analysis pipeline: BadmintonAnalysisSystem
-├── court/           # Court annotation and coordinate mapping
-├── data/            # JSON / JSONL output
+├── config.py        # YAML config loader and AppConfig
+├── storage.py       # SQLite history + metrics.json writer
+├── analytics/       # Real-time heatmap + post-analysis (rally segmentation, KDE, scatter)
+├── sources/         # Multi-source input (screen capture / headless browser / video file / stream adapter)
+├── court/           # Court detection, coordinate mapping, drift correction, auto-update
 ├── detection/       # Shuttlecock detection and pose detection
-├── media/           # Video/audio processing
 ├── tracking/        # Player tracking
-└── visualization/   # Video overlays, statistics charts, and position plots
+├── visualization/   # Video overlays, statistics charts, and position plots
+└── media/           # Video/audio processing
 ```
 
 ## Acknowledgements
@@ -331,7 +343,7 @@ The right column refreshes each frame with:
 - Current rally id
 - Upper-court + lower-court player count / average speed / cumulative distance
 
-After the run, results are written to `outputs/football.db` (SQLite) and the bottom table shows the history.
+After the run, results are written to `outputs/badminton.db` (SQLite) and the bottom table shows the history.
 
 ### Court detection options
 
@@ -343,7 +355,7 @@ After the run, results are written to `outputs/football.db` (SQLite) and the bot
 | Directory | Contents |
 |---|---|
 | `outputs/runs/run_<timestamp>_<id>/` | per-run `metrics.json` + annotated video |
-| `outputs/football.db` | SQLite history |
+| `outputs/badminton.db` | SQLite history |
 | `outputs/uploads/` | videos uploaded through the web UI |
 
 ### Known limits
@@ -385,7 +397,35 @@ The Streamlit sidebar "Advanced" expander exposes the same controls.
 > Note: `main.py` (local-file analysis) defaults to `enable_court_updater=False` to keep the byte-level regression identical. The updater is only enabled in `live.py` / Streamlit real-time sources.
 
 
+## Post-analysis
+
+After stopping recognition or completing video processing, the system automatically performs post-analysis on `detections.jsonl`:
+
+- **Rally segmentation**: Splits detection data into individual rallies based on rally IDs
+- **KDE heatmaps**: Generates kernel density estimation heatmaps for each rally and the full match
+- **Scatter plots**: Player position scatter plots, color-coded by upper/lower court
+- **Movement statistics**: Per-rally movement distance, average speed, and maximum speed
+
+Results are saved in `outputs/runs/run_<timestamp>_<id>/post_analysis/`.
+
+
+## Differences from the Original
+
+This project is a derivative work based on the original badminton analysis tool. Key improvements:
+
+| Aspect | Original | This Project |
+|--------|----------|--------------|
+| Input sources | Local video files only | Local video + screen capture + headless browser |
+| Web UI | Gradio (offline upload) | Streamlit (real-time frame display + interactive annotation) |
+| Court model | One-time detection at startup | Auto periodic update + drift correction |
+| Heatmap | Post-processing only | Real-time overlay + post-analysis KDE high-quality maps |
+| Post-analysis | None | Rally segmentation, KDE heatmaps, scatter plots, movement statistics |
+| GPU optimization | CPU default | FP16 + TF32 + cuDNN benchmark |
+| Data storage | JSONL + video | JSONL + video + SQLite history + metrics.json |
+| Court model file | reference.py (separate module) | Constants inlined into detector.py, reduced module dependencies |
+
+
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/Good-Badminton&type=Date)](https://www.star-history.com/#yo-WASSUP/Good-Badminton&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=yo-WASSUP/BirdieEye&type=Date)](https://www.star-history.com/#yo-WASSUP/BirdieEye&Date)
 

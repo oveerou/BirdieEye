@@ -150,10 +150,10 @@ class PlayerTracker:
 
         self.rally_stats[region]["total_distance"] += distance
         self.rally_stats[region]["max_speed"] = max(self.rally_stats[region]["max_speed"], capped_speed)
-        self.current_speed[region] = capped_speed
 
         self.match_stats[region]["total_distance"] += distance
         self.match_stats[region]["max_speed"] = max(self.match_stats[region]["max_speed"], capped_speed)
+
         self.current_speed[region] = capped_speed
 
     def start_new_rally(self):

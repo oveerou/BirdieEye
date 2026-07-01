@@ -1,1 +1,1 @@
-"""Data record helpers for Good-Badminton outputs."""
+"""Data record helpers for BirdieEye outputs."""
