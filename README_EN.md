@@ -15,7 +15,10 @@
 
 ## 🎬 Preview
 
-> Preview GIF and screenshots are not included in the source repo. See the [original project](https://github.com/yo-WASSUP/Good-Badminton) or run locally to capture your own.
+![Main analysis UI](screenshots/demo-1.png)
+![Real-time recognition & court annotation](screenshots/demo-2.png)
+![Heatmap & stats panel](screenshots/demo-3.png)
+![Post-analysis](screenshots/demo-4.png)
 
 ## 🆕 Changelog
 

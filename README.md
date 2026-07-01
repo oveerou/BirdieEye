@@ -15,7 +15,10 @@
 
 ## 🎬 效果预览
 
-> 由于 GitHub 仓库精简，预览 GIF 和截图未包含在源码中。可查看 [原项目](https://github.com/yo-WASSUP/Good-Badminton) 或在本地运行后自行截取。
+![分析主界面](screenshots/demo-1.png)
+![实时识别与球场标注](screenshots/demo-2.png)
+![热力图与统计面板](screenshots/demo-3.png)
+![赛后分析](screenshots/demo-4.png)
 
 ## 🆕 更新日志
 - **2026-06-29**：新增后期分析模块（回合切片、KDE 热力图、散点图、移动统计）；球场漂移矫正；GPU FP16/TF32 推理优化；Web UI 交互改进（错误堆栈展示、球场检测重试、启动提醒）。
