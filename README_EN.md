@@ -15,10 +15,12 @@
 
 ## 🎬 Preview
 
-![Main analysis UI](screenshots/demo-1.png)
-![Real-time recognition & court annotation](screenshots/demo-2.png)
-![Heatmap & stats panel](screenshots/demo-3.png)
-![Post-analysis](screenshots/demo-4.png)
+| Feature | Screenshot |
+|---------|-----------|
+| **Screen Capture** — capture any screen region for real-time analysis | ![screen capture](screenshots/demo-1.png) |
+| **Court Annotation** — mark 4 court corners for coordinate mapping | ![corner annotation](screenshots/demo-2.png) |
+| **Live Analysis** — skeleton, trajectory tracking, stats overlay | ![live analysis](screenshots/demo-3.png) |
+| **Post-analysis** — per-rally heatmap, scatter plot, movement stats | ![post analysis](screenshots/demo-4.png) |
 
 ## 🆕 Changelog
 
