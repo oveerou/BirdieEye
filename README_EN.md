@@ -24,13 +24,7 @@
 
 ## 🆕 Changelog
 
-- **2026-06-29**: Added post-analysis module (rally segmentation, KDE heatmaps, scatter plots, movement statistics); court drift correction; GPU FP16/TF32 inference optimization; Web UI interaction improvements (error traceback display, court detection retry, startup reminder).
-- **2026-06-27**: Added multi-source real-time input (screen capture / headless browser); Streamlit web console; court model auto-update + real-time heatmap; SQLite history tracking.
-- **2026-06-23**: Added automatic court boundary detection.
-- **2026-06-20**: Initial open-source release.
-- **2026-06-17**: Project documentation cleanup.
-- **Current version**: Supports player pose detection, shuttlecock detection, court coordinate mapping, trajectory statistics, heatmaps, scatter plots, and annotated video output.
-- **Experimental features**: Hit-point analysis and stroke statistics are still under active iteration and are mainly intended for research and secondary development.
+A derivative work based on the original badminton analysis tool, adding multi-source real-time input (screen capture/headless browser), Streamlit web console, court model auto-update & drift correction, real-time heatmap overlay, post-analysis (rally segmentation/KDE heatmaps/scatter plots), and GPU FP16/TF32 inference optimization.
 
 ## 🔮 Roadmap
 
